@@ -8,6 +8,7 @@ on:
       - 'examples/**'
       - '*.cpp'
       - '*.h'
+      - 'library.properties'
       - '.github/workflows/**'
   pull_request:
     branches: [ main, develop ]
@@ -16,6 +17,7 @@ on:
       - 'examples/**'
       - '*.cpp'
       - '*.h'
+      - 'library.properties'
       - '.github/workflows/**'
 
 jobs:
