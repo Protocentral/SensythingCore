@@ -8,6 +8,7 @@ on:
       - 'examples/**'
       - '*.cpp'
       - '*.h'
+      - '.github/workflows/**'
   pull_request:
     branches: [ main, develop ]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'examples/**'
       - '*.cpp'
       - '*.h'
+      - '.github/workflows/**'
 
 jobs:
   lint:
