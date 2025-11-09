@@ -44,8 +44,8 @@ jobs:
       - name: Install required libraries
         run: |
           arduino-cli lib install "WebSockets"
-          arduino-cli lib install --git-url "https://github.com/Protocentral/ProtoCentral_fdc1004_breakout.git" || true
-          arduino-cli lib install --git-url "https://github.com/Protocentral/protocentral-afe4490-arduino.git" || true
+          arduino-cli lib install --git-url "https://github.com/Protocentral/ProtoCentral_fdc1004_breakout.git" 
+          arduino-cli lib install --git-url "https://github.com/Protocentral/protocentral-afe4490-arduino.git"
 
       - name: Compile standard sketches
         uses: arduino/compile-sketches@v1
