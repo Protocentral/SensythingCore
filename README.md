@@ -1,4 +1,4 @@
-# SensythingES3 - Arduino Library
+# Protocentral SensythingES3 Arduino Library
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arduino Library](https://img.shields.io/badge/Arduino-Library-blue.svg)](https://www.arduino.cc/reference/en/libraries/)
@@ -16,13 +16,13 @@ All boards share common ESP32-S3 hardware and communication infrastructure while
 
 ## Features
 
-- 📡 **USB Serial Streaming**: CSV format with emoji prefixes for easy debugging
-- 📱 **BLE Streaming**: OPENVIEW protocol compatible (Phase 2)
-- 🌐 **WiFi Streaming**: WebSocket real-time data + web dashboard (Phase 3)
-- 💾 **SD Card Logging**: High-speed SDIO logging with CSV format (Phase 2)
-- ⚙️ **Unified API**: Same code structure across all Sensything boards
-- 🎛️ **Configurable**: Sample rate, interfaces, and output formats
-- 🔧 **Command Interface**: Interactive commands via Serial/BLE/WiFi
+- **USB Serial Streaming**: CSV format with emoji prefixes for easy debugging
+- **BLE Streaming**: OPENVIEW protocol compatible (Phase 2)
+- **WiFi Streaming**: WebSocket real-time data + web dashboard (Phase 3)
+- **SD Card Logging**: High-speed SDIO logging with CSV format (Phase 2)
+- **Unified API**: Same code structure across all Sensything boards
+- **Configurable**: Sample rate, interfaces, and output formats
+- **Command Interface**: Interactive commands via Serial/BLE/WiFi
 
 ## Installation
 
@@ -30,7 +30,7 @@ All boards share common ESP32-S3 hardware and communication infrastructure while
 
 1. Open Arduino IDE
 2. Go to **Sketch > Include Library > Manage Libraries**
-3. Search for "SensythingES3"
+3. Search for "SensythingCore"
 4. Click **Install**
 
 ### Manual Installation
@@ -122,27 +122,6 @@ void loop() {
 ### Required Libraries (OX Board)
 - [Protocentral_AFE44xx](https://github.com/Protocentral/Protocentral_AFE44xx) - AFE4400 sensor driver ✅
 
-### Optional (for Phase 2/3)
-- WebSocketsServer - WebSocket communication (for WiFi dashboard)
-
-Install via Arduino Library Manager.
-
-## Examples
-
-### 01.Basic
-- **Cap_USB_Streaming**: Simple USB Serial streaming (Cap board)
-- **OX_USB_Streaming**: Simple USB Serial streaming (OX board, requires AFE44xx library)
-
-### 02.Communication (Phase 2)
-- Cap_BLE_Streaming: BLE with OPENVIEW protocol
-- Cap_WiFi_Dashboard: WebSocket + web interface
-
-### 03.DataLogging (Phase 2)
-- Cap_SD_Logger: High-speed SD card logging
-
-### 04.Advanced (Phase 2)
-- Cap_MultiInterface: All interfaces simultaneously
-
 ## API Reference
 
 ### Core Methods
@@ -189,7 +168,7 @@ Type these in Serial Monitor (115200 baud, Newline):
 
 ## Data Format
 
-### USB Serial Output (CSV with Emoji)
+### USB Serial Output
 ```
 📊 timestamp,ch0_pf,ch1_pf,ch2_pf,ch3_pf,capdac_0,capdac_1,capdac_2,capdac_3,status_flags,count
 📊 1523,12.3456,15.6789,10.2345,13.4567,5,5,5,5,0x00,1
@@ -202,17 +181,6 @@ Type these in Serial Monitor (115200 baud, Newline):
 - `0x04` - Channel 2 measurement failed
 - `0x08` - Channel 3 measurement failed
 - `0x40` - CAPDAC adjusting (normal during stabilization)
-
-## Architecture
-
-The library uses an object-oriented design with:
-
-- **SensythingCore**: Abstract base class with common functionality
-- **SensythingCap**: Board-specific implementation for Cap
-- **Communication Modules**: Pluggable USB/BLE/WiFi/SD modules
-- **Unified Data Structures**: Common measurement format across all boards
-
-This allows easy addition of new boards while maintaining API consistency.
 
 ## Troubleshooting
 
