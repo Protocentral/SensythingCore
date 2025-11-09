@@ -1,0 +1,111 @@
+name: Compile Examples
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'examples/**'
+      - 'library.properties'
+      - '.github/workflows/compile-examples.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'examples/**'
+      - 'library.properties'
+
+env:
+  SKETCHES_REPORTS_PATH: sketches-reports
+
+jobs:
+  compile:
+    name: Compile examples
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        fqbn:
+          - esp32:esp32:esp32s3
+          - esp32:esp32:adafruit_feather_esp32s3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Install board platform
+        run: |
+          arduino-cli core install esp32:esp32
+
+      - name: Install required libraries
+        run: |
+          arduino-cli lib install "Protocentral_FDC1004"
+          arduino-cli lib install "Protocentral_AFE44xx"
+          arduino-cli lib install "WebSockets"
+          # Also try to install from source for development
+          arduino-cli lib install --git-url "https://github.com/Protocentral/Protocentral_FDC1004.git" || true
+          arduino-cli lib install --git-url "https://github.com/Protocentral/Protocentral_AFE44xx.git" || true
+
+      - name: Compile sketches
+        uses: arduino/compile-sketches@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}
+          sketch-paths: |
+            - examples/01.SensythingCAP/01.Basic/Cap_USB_Streaming
+            - examples/01.SensythingCAP/02.Communication/Cap_BLE_Streaming
+            - examples/01.SensythingCAP/03.DataLogging/Cap_SD_Logger
+            - examples/01.SensythingCAP/04.WiFi/Cap_WiFi_Station
+            - examples/01.SensythingCAP/04.WiFi/Cap_WiFi_Dashboard
+            - examples/01.SensythingCAP/04.WiFi/Cap_WiFi_Config_Portal
+            - examples/02.SensythingOX/01.Basic/OX_USB_Streaming
+            - examples/02.SensythingOX/02.Communication/OX_BLE_Streaming
+            - examples/02.SensythingOX/03.DataLogging/OX_SD_Logger
+            - examples/02.SensythingOX/04.WiFi/OX_WiFi_Dashboard
+            - examples/03.Applications/Cap_WiFi_App
+            - examples/03.Applications/OX_WiFi_App
+          verbose: false
+          enable-deltas-report: true
+          sketches-report-path: ${{ env.SKETCHES_REPORTS_PATH }}
+
+      - name: Save sketches report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: sketches-report-${{ matrix.fqbn }}
+          path: ${{ env.SKETCHES_REPORTS_PATH }}
+          retention-days: 30
+
+  compile-summary:
+    name: Compile summary
+    runs-on: ubuntu-latest
+    needs: compile
+    if: always()
+    
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v3
+        with:
+          path: all-reports
+
+      - name: Summary
+        run: |
+          echo "## Compilation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Count successful compilations
+          SUCCESS_COUNT=$(find all-reports -name "*.md" -exec grep -l "✓" {} \; | wc -l)
+          echo "✓ Successfully compiled sketches: $SUCCESS_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Display compilation details
+          if [ -d "all-reports" ]; then
+            echo "### Board FQBNs Tested:" >> $GITHUB_STEP_SUMMARY
+            ls -1 all-reports/ | grep sketches-report | sed 's/sketches-report-/- /' | sed 's/:/%3A/g' | sed 's/%3A/:/g' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "Detailed reports are available in the Artifacts section." >> $GITHUB_STEP_SUMMARY

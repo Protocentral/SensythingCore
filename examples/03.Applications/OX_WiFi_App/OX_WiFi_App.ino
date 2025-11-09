@@ -18,9 +18,8 @@
 //   - Access dashboard via http://sensything.local (or IP address)
 //   - AP remains available at 192.168.4.1 for reconfiguration
 //   - Use "Forget Network" button to clear saved credentials
-//
 
-#include <SensythingES3.h>
+#include <SensythingCore.h>
 
 // Access Point Settings (used when no saved credentials or connection fails)
 const char* AP_SSID = "sensything";              // AP network name

@@ -49,7 +49,7 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-#include <SensythingES3.h>
+#include <SensythingCore.h>
 
 // Create Sensything OX instance
 SensythingOX sensything;

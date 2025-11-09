@@ -30,7 +30,7 @@
 //
 // This software is licensed under the MIT License (http://opensource.org/licenses/MIT).
 
-#include <SensythingES3.h>
+#include <SensythingCore.h>
 
 const char* WIFI_SSID = "zeus";      // Your WiFi network name
 const char* WIFI_PASSWORD = "open1234";     // Your WiFi password

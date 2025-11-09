@@ -46,6 +46,10 @@
 // - Sensything Platform (this library)
 // - Protocentral_AFE44xx (via Arduino Library Manager)
 //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+#include <SensythingCore.h>
+
 // Notes:
 // - OX sensor produces 125Hz data, which gets buffered efficiently
 // - 10-line buffer = ~80ms of data at 125Hz before write
@@ -53,8 +57,6 @@
 // - Watch Serial Monitor for SD write warnings
 //
 //////////////////////////////////////////////////////////////////////////////////////////
-
-#include <SensythingES3.h>
 
 // Create OX board instance
 SensythingOX sensything;

@@ -40,7 +40,7 @@
 //
 //////////////////////////////////////////////////////////////////////////////////////////
 
-#include <SensythingES3.h>
+#include <SensythingCore.h>
 
 // Create Sensything Cap instance
 SensythingCap sensything;

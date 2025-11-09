@@ -74,7 +74,7 @@
 //
 // This software is licensed under the MIT License (http://opensource.org/licenses/MIT).
 
-#include <SensythingES3.h>
+#include <SensythingCore.h>
 
 // WiFi Mode Selection (uncomment ONE of these)
 #define WIFI_MODE_AP          // Create standalone Access Point

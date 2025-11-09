@@ -1,0 +1,71 @@
+name: Arduino Lint
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'examples/**'
+      - '*.cpp'
+      - '*.h'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'src/**'
+      - 'examples/**'
+      - '*.cpp'
+      - '*.h'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+
+      - name: Install Arduino Lint
+        run: |
+          mkdir -p $HOME/.local/bin
+          cd $HOME/.local/bin
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-lint/main/etc/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Run Arduino Lint on library
+        run: |
+          arduino-lint \
+            --library-manager update-index \
+            --report-file lint-report.json \
+            .
+
+      - name: Display lint results
+        if: always()
+        run: |
+          if [ -f lint-report.json ]; then
+            echo "=== Arduino Lint Results ==="
+            cat lint-report.json | jq . || cat lint-report.json
+          fi
+
+      - name: Check for lint errors
+        run: |
+          if [ -f lint-report.json ]; then
+            # Check if there are any errors (not warnings)
+            if grep -q '"severity":"error"' lint-report.json; then
+              echo "❌ Arduino Lint found errors"
+              cat lint-report.json | jq '.rules[] | select(.severity=="error")'
+              exit 1
+            else
+              echo "✓ No Arduino Lint errors found"
+            fi
+          fi
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: arduino-lint-report
+          path: lint-report.json
+          retention-days: 30

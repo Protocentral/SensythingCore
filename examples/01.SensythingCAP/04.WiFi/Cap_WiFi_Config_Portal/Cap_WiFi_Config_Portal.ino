@@ -31,7 +31,7 @@
 //
 // This software is licensed under the MIT License (http://opensource.org/licenses/MIT).
 
-#include <SensythingES3.h>
+#include <SensythingCore.h>
 
 const char* AP_SSID = "sensything";             // Access Point name
 const char* AP_PASSWORD = "sensything";         // AP password (min 8 chars)
