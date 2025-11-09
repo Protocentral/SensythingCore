@@ -44,8 +44,8 @@ jobs:
       - name: Install required libraries
         run: |
           arduino-cli lib install "WebSockets"
-          arduino-cli lib install --git-url "https://github.com/Protocentral/ProtoCentral_fdc1004_breakout.git" 
-          arduino-cli lib install --git-url "https://github.com/Protocentral/protocentral-afe4490-arduino.git"
+          arduino-cli lib install "ProtoCentral FDC1004 Capacitive Sensor Library"
+          arduino-cli lib install "ProtoCentral AFE4490 PPG and SpO2 boards library"
 
       - name: Compile standard sketches
         uses: arduino/compile-sketches@v1
