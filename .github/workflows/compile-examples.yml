@@ -50,7 +50,7 @@ jobs:
           arduino-cli lib install --git-url "https://github.com/Protocentral/Protocentral_FDC1004.git" || true
           arduino-cli lib install --git-url "https://github.com/Protocentral/Protocentral_AFE44xx.git" || true
 
-      - name: Compile sketches
+      - name: Compile standard sketches
         uses: arduino/compile-sketches@v1
         with:
           fqbn: ${{ matrix.fqbn }}
@@ -65,15 +65,19 @@ jobs:
             - examples/02.SensythingOX/02.Communication/OX_BLE_Streaming
             - examples/02.SensythingOX/03.DataLogging/OX_SD_Logger
             - examples/02.SensythingOX/04.WiFi/OX_WiFi_Dashboard
-            - examples/03.Applications/Cap_WiFi_App
-            - examples/03.Applications/OX_WiFi_App
           verbose: false
           enable-deltas-report: true
           sketches-report-path: ${{ env.SKETCHES_REPORTS_PATH }}
 
+      - name: Compile WiFi applications (with huge_app partition)
+        if: matrix.fqbn == 'esp32:esp32:esp32s3'
+        run: |
+          arduino-cli compile -b "${{ matrix.fqbn }}" --board-options "PartitionScheme=huge_app" examples/03.Applications/Cap_WiFi_App/ -v
+          arduino-cli compile -b "${{ matrix.fqbn }}" --board-options "PartitionScheme=huge_app" examples/03.Applications/OX_WiFi_App/ -v
+
       - name: Save sketches report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sketches-report-${{ matrix.fqbn }}
           path: ${{ env.SKETCHES_REPORTS_PATH }}
@@ -87,7 +91,7 @@ jobs:
     
     steps:
       - name: Download all reports
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: all-reports
 

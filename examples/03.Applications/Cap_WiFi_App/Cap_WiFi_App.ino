@@ -3,6 +3,19 @@
 //
 // SensythingCAP - Complete WiFi Application
 //
+// ⚠️  BUILD NOTE: This sketch includes the full embedded web dashboard and exceeds
+//    the default ESP32-S3 flash partition size (1.3MB). 
+//    
+//    For LOCAL compilation in Arduino IDE, change Partition Scheme:
+//       Tools > Partition Scheme > "Huge APP (3MB No OTA/1MB SPIFFS)"
+//    
+//    For ARDUINO-CLI or CI/CD, use the --board-options flag:
+//       arduino-cli compile -b esp32:esp32:esp32s3 \
+//         --board-options "PartitionScheme=huge_app" \
+//         examples/03.Applications/Cap_WiFi_App/
+//    
+//    GitHub Actions automatically uses this approach (see .github/workflows/compile-examples.yml)
+//
 // First Time Setup:
 //   1. Upload this sketch to Sensything Cap
 //   2. Device creates WiFi AP "sensything" (password: sensything)
