@@ -69,8 +69,8 @@ jobs:
       - name: Compile WiFi applications (with huge_app partition)
         if: matrix.fqbn == 'esp32:esp32:esp32s3'
         run: |
-          arduino-cli compile -b "${{ matrix.fqbn }}" --board-options "PartitionScheme=huge_app" examples/03.Applications/Cap_WiFi_App/ -v
-          arduino-cli compile -b "${{ matrix.fqbn }}" --board-options "PartitionScheme=huge_app" examples/03.Applications/OX_WiFi_App/ -v
+          arduino-cli compile -b "${{ matrix.fqbn }}" --board-options "PartitionScheme=huge_app" --library "$PWD" examples/03.Applications/Cap_WiFi_App/ -v
+          arduino-cli compile -b "${{ matrix.fqbn }}" --board-options "PartitionScheme=huge_app" --library "$PWD" examples/03.Applications/OX_WiFi_App/ -v
 
       - name: Save sketches report
         if: always()

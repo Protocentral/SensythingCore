@@ -29,7 +29,7 @@ jobs:
       - name: Run Arduino Lint
         uses: arduino/arduino-lint-action@v2
         with:
-          library-manager: update
+          library-manager: skip
           compliance: strict
 
       - name: Check lint results
