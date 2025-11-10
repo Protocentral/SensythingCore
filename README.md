@@ -1,16 +1,20 @@
-# Protocentral SensythingES3 Arduino Library
+# Protocentral Sensything Arduino Library
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arduino Library](https://img.shields.io/badge/Arduino-Library-blue.svg)](https://www.arduino.cc/reference/en/libraries/)
 
+![Sensything](assets/sensything_logo.png)
+
 A unified platform library for the SensythingES3 family of ESP32-S3 sensor boards from Protocentral Electronics.
+
+![Sensything Boards](assets/sensything_boards.jpg)
 
 ## Overview
 
 The SensythingES3 library provides a consistent, modular API for all SensythingES3 boards, including:
 
-- **SensythingES3 Cap**: 4-channel capacitance measurement using FDC1004 (Phase 1 ✅ Complete)
-- **SensythingES3 OX**: PPG/SpO2/HR measurement using AFE4400 (Phase 4 ✅ Complete Infrastructure)
+- **SensythingCAP**: 4-channel capacitance measurement using FDC1004 
+- **SensythingOX**: PPG/SpO2/HR measurement using AFE4400
 
 All boards share common ESP32-S3 hardware and communication infrastructure while supporting board-specific sensors through inheritance-based polymorphism.
 
@@ -35,14 +39,14 @@ All boards share common ESP32-S3 hardware and communication infrastructure while
 
 ### Manual Installation
 
-1. Download the latest release from [GitHub](https://github.com/Protocentral/sensything_cap)
+1. Download the latest release from [GitHub](https://github.com/Protocentral/SensythingCore)
 2. Extract to your Arduino libraries folder:
    - Windows: `Documents\Arduino\libraries\`
    - Mac: `~/Documents/Arduino/libraries/`
    - Linux: `~/Arduino/libraries/`
 3. Restart Arduino IDE
 
-## Quick Start - Sensything Cap
+## Quick Start - SensythingCAP
 
 ```cpp
 #include <Sensything.h>
@@ -66,7 +70,7 @@ void loop() {
 
 That's it! The board will now stream 4-channel capacitance data via USB Serial.
 
-## Quick Start - Sensything OX
+## Quick Start - SensythingOX
 
 ```cpp
 #include <Sensything.h>
@@ -117,10 +121,10 @@ void loop() {
 ## Dependencies
 
 ### Required Libraries (Cap Board)
-- [Protocentral_FDC1004](https://github.com/Protocentral/Protocentral_FDC1004) - FDC1004 sensor driver
+- [ProtoCentral FDC1004 Capacitive Sensor Library](https://github.com/Protocentral/ProtoCentral_fdc1004_breakout) - FDC1004 sensor driver
 
 ### Required Libraries (OX Board)
-- [Protocentral_AFE44xx](https://github.com/Protocentral/Protocentral_AFE44xx) - AFE4400 sensor driver ✅
+- [ProtoCentral AFE4490 PPG and SpO2 boards library](https://github.com/Protocentral/protocentral-afe4490-arduino) - AFE4400 sensor driver ✅
 
 ## API Reference
 
