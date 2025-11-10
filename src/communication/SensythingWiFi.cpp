@@ -419,10 +419,31 @@ void SensythingWiFi::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload
                 Serial.println(ip.toString());
                 clientCount++;
                 
-                // Send welcome message with board info
-                String welcome = "{\"type\":\"info\",\"board\":\"" + String(boardConfig.channels[0].label) + 
-                               "\",\"channels\":" + String(boardConfig.channelCount) + "}";
+                // Determine board type string
+                String boardType = "UNKNOWN";
+                String sampleRateStr = "[100]";  // Default fallback
+                
+                if (boardConfig.boardType == BOARD_TYPE_OX) {
+                    boardType = "OX";
+                    // OX runs at ~125Hz (8ms), offer range from 50-125Hz
+                    sampleRateStr = "[8,10,12,16,20]";  // ms periods
+                } else if (boardConfig.boardType == BOARD_TYPE_CAP) {
+                    boardType = "CAP";
+                    // CAP typically 10Hz, offer 2-20Hz range
+                    sampleRateStr = "[50,100,200,500]";  // ms periods
+                }
+                
+                // Send enhanced init message with board detection info
+                String welcome = "{\"type\":\"init\","
+                               "\"board\":\"" + boardType + "\","
+                               "\"boardName\":\"" + String(boardConfig.boardName) + "\","
+                               "\"channels\":" + String(boardConfig.channelCount) + ","
+                               "\"sampleRates\":" + sampleRateStr + ","
+                               "\"sampleInterval\":" + String(boardConfig.minSampleInterval) + "}";
+                
                 pWebSocket->sendTXT(num, welcome);
+                
+                Serial.println(String(EMOJI_INFO) + " Sent board info: " + boardType);
             }
             break;
             
@@ -908,6 +929,108 @@ String SensythingWiFi::generateDashboardHTML() {
             color: #666;
             font-size: 12px;
         }
+        
+        /* ===== OX BOARD SPECIFIC STYLES ===== */
+        
+        /* OX Vitals Container */
+        .ox-vitals-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        /* OX Vital Card - Large and Prominent */
+        .ox-vital-card {
+            padding: 20px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 180px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+        }
+        
+        .ox-vital-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+        
+        .ox-vital-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            line-height: 1;
+            margin: 12px 0;
+        }
+        
+        .ox-vital-unit {
+            font-size: 18px;
+            color: #999;
+            font-weight: 500;
+        }
+        
+        .ox-vital-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        
+        .ox-status-normal {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .ox-status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .ox-status-critical {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* OX PPG Section */
+        .ox-ppg-section {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .ox-ppg-chart {
+            height: 250px !important;
+        }
+        
+        /* CAP Grid Adjustment */
+        .cap-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        
+        @media (max-width: 1200px) {
+            .cap-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .cap-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .ox-vitals-container {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1049,9 +1172,45 @@ String SensythingWiFi::generateDashboardHTML() {
         </div>
     </div>
 
+    <!-- OX BOARD DASHBOARD TEMPLATE -->
+    <template id="oxDashboard">
+        <div id="oxVitalsSection">
+            <div class="ox-vitals-container">
+                <div class="ox-vital-card">
+                    <div class="ox-vital-label">Heart Rate</div>
+                    <div class="ox-vital-value" id="oxHR">-- </div>
+                    <div class="ox-vital-unit">BPM</div>
+                    <div class="ox-vital-status ox-status-normal" id="oxHRStatus">✓ Normal</div>
+                </div>
+                
+                <div class="ox-vital-card">
+                    <div class="ox-vital-label">SpO₂</div>
+                    <div class="ox-vital-value" id="oxSPO2">-- </div>
+                    <div class="ox-vital-unit">%</div>
+                    <div class="ox-vital-status ox-status-normal" id="oxSPO2Status">✓ Normal</div>
+                </div>
+            </div>
+            
+            <div class="ox-ppg-section">
+                <h3 style="margin: 0 0 12px 0; color: #333;">📈 PPG Waveforms</h3>
+                <canvas id="oxChartCanvas" style="width: 100%; height: 300px;"></canvas>
+            </div>
+        </div>
+    </template>
+
+    <!-- CAP BOARD DASHBOARD TEMPLATE -->
+    <template id="capDashboard">
+        <div id="capChannelsSection">
+            <h3 style="margin: 0 0 12px 0; color: #333;">📊 Channel Data</h3>
+            <div class="cap-grid info-grid" id="capChannelValues">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </template>
+
     <script>
-        const canvas = document.getElementById('chartCanvas');
-        const ctx = canvas.getContext('2d');
+        let canvas = null;
+        let ctx = null;
         let maxDataPoints = 500;
         let paused = false;
         let sampleCount = 0;
@@ -1064,14 +1223,25 @@ String SensythingWiFi::generateDashboardHTML() {
             channelData.push([]);
         }
         
+        function initCanvasAfterDOMReady() {
+            canvas = document.getElementById('chartCanvas');
+            if (!canvas) {
+                console.error('Canvas element not found!');
+                return false;
+            }
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            return true;
+        }
+        
         function resizeCanvas() {
+            if (!canvas) return;
             canvas.width = canvas.clientWidth;
             canvas.height = canvas.clientHeight;
             drawChart();
         }
         
         window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
         
         // ===== WINDOW SIZE CONTROLS =====
         function increaseWindowSize() {
@@ -1150,12 +1320,20 @@ String SensythingWiFi::generateDashboardHTML() {
             try {
                 const data = JSON.parse(event.data);
                 
+                // Handle board initialization message
+                if (data.type === 'init') {
+                    console.log('Board detected:', data.board);
+                    handleBoardInit(data);
+                    return;
+                }
+                
+                // Legacy 'info' message (backwards compatibility)
                 if (data.type === 'info') {
-                    // Board info message
                     initializeChart(data.channels);
                     return;
                 }
                 
+                // Handle measurement data
                 if (data.ch) {
                     updateChart(data);
                     updateChannelValues(data.ch);
@@ -1166,6 +1344,199 @@ String SensythingWiFi::generateDashboardHTML() {
                 console.error('Parse error:', e);
             }
         };
+        
+        // Board detection and routing
+        let currentBoard = null;
+        
+        function handleBoardInit(initData) {
+            currentBoard = initData.board;
+            console.log('Initializing dashboard for:', currentBoard);
+            console.log('Init data:', initData);
+            
+            if (currentBoard === 'OX') {
+                initializeOXDashboard(initData);
+            } else if (currentBoard === 'CAP') {
+                initializeCAPDashboard(initData);
+            } else {
+                console.warn('Unknown board type:', currentBoard);
+                initializeChart(initData.channels || 4);
+            }
+        }
+        
+        function initializeOXDashboard(config) {
+            console.log('Setting up OX Dashboard');
+            
+            // Hide generic chart and channel values
+            const chartContainer = document.querySelector('.chart-container');
+            const channelValues = document.getElementById('channelValues');
+            
+            if (chartContainer) chartContainer.style.display = 'none';
+            if (channelValues) channelValues.style.display = 'none';
+            
+            // Show the template by moving it into the main area
+            const oxTemplate = document.getElementById('oxDashboard');
+            if (oxTemplate) {
+                // Clone the template content
+                const oxDom = oxTemplate.content.cloneNode(true);
+                
+                // Insert right after the toolbar
+                const toolbar = document.querySelector('.toolbar');
+                if (toolbar && toolbar.parentNode) {
+                    toolbar.parentNode.insertBefore(oxDom, toolbar.nextSibling);
+                }
+            }
+            
+            // Initialize chart canvas for OX (PPG waveforms)
+            const oxCanvas = document.getElementById('oxChartCanvas');
+            if (oxCanvas) {
+                canvas = oxCanvas;  // Update global canvas reference
+                ctx = canvas.getContext('2d');
+                maxDataPoints = 200;  // Set window size to 200 samples for OX
+                document.getElementById('windowValue').textContent = '200';
+                resizeCanvas();
+                drawChart();
+            }
+            
+            console.log('OX Dashboard ready');
+        }
+        
+        function initializeCAPDashboard(config) {
+            console.log('Setting up CAP Dashboard');
+            
+            // Set window size to 500 samples for CAP
+            maxDataPoints = 500;
+            document.getElementById('windowValue').textContent = '500';
+            
+            // Show generic chart and channel values (already visible)
+            const chartContainer = document.querySelector('.chart-container');
+            const channelValues = document.getElementById('channelValues');
+            
+            if (chartContainer) chartContainer.style.display = 'block';
+            if (channelValues) channelValues.style.display = 'block';
+            
+            // Initialize channel grid
+            const grid = channelValues;
+            if (grid) {
+                grid.classList.add('cap-grid');
+                grid.innerHTML = '';
+                for (let i = 0; i < (config.channels || 4); i++) {
+                    grid.innerHTML += `
+                        <div class="info-card">
+                            <div class="info-label">Channel ${i}</div>
+                            <div class="info-value" id="ch${i}">--</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Initialize chart
+            const chartCanvas = document.getElementById('chartCanvas');
+            if (chartCanvas) {
+                canvas = chartCanvas;  // Update global canvas reference
+                ctx = canvas.getContext('2d');
+                resizeCanvas();
+                drawChart();
+            }
+            
+            console.log('CAP Dashboard ready');
+        }
+        
+        function updateChart(data) {
+            // If OX board, use different update logic
+            if (currentBoard === 'OX') {
+                updateOXChart(data);
+                return;
+            }
+            
+            // Default CAP chart update
+            data.ch.forEach((value, i) => {
+                if (value !== null && i < channelData.length) {
+                    channelData[i].push({
+                        x: data.cnt,
+                        y: value
+                    });
+                    
+                    if (channelData[i].length > maxDataPoints) {
+                        channelData[i].shift();
+                    }
+                }
+            });
+            
+            drawChart();
+        }
+        
+        function updateOXChart(data) {
+            // OX board: ch[0]=IR, ch[1]=RED, ch[2]=SpO2, ch[3]=HR
+            if (data.ch && data.ch.length >= 4) {
+                // Update PPG waveforms (IR and RED)
+                for (let i = 0; i < 2; i++) {
+                    const value = data.ch[i];
+                    if (value !== null) {
+                        if (!channelData[i]) channelData[i] = [];
+                        channelData[i].push({
+                            x: data.cnt,
+                            y: value
+                        });
+                        
+                        if (channelData[i].length > maxDataPoints) {
+                            channelData[i].shift();
+                        }
+                    }
+                }
+                
+                // Update vital signs (SpO2 at ch[2], HR at ch[3])
+                const spo2 = data.ch[2];
+                const hr = data.ch[3];
+                
+                if (spo2 !== null && spo2 !== undefined) {
+                    const spo2El = document.getElementById('oxSPO2');
+                    if (spo2El) {
+                        spo2El.textContent = Math.round(spo2);
+                        updateVitalStatus('SPO2', spo2);
+                    }
+                }
+                
+                if (hr !== null && hr !== undefined) {
+                    const hrEl = document.getElementById('oxHR');
+                    if (hrEl) {
+                        hrEl.textContent = Math.round(hr);
+                        updateVitalStatus('HR', hr);
+                    }
+                }
+            }
+            
+            drawChart();
+        }
+        
+        function updateVitalStatus(vital, value) {
+            if (vital === 'HR') {
+                const statusEl = document.getElementById('oxHRStatus');
+                if (statusEl) {
+                    if (value < 60 || value > 100) {
+                        statusEl.textContent = '⚠ Check HR';
+                        statusEl.className = 'ox-vital-status ox-status-warning';
+                    } else {
+                        statusEl.textContent = '✓ Normal';
+                        statusEl.className = 'ox-vital-status ox-status-normal';
+                    }
+                }
+            } else if (vital === 'SPO2') {
+                const statusEl = document.getElementById('oxSPO2Status');
+                if (statusEl) {
+                    if (value < 95) {
+                        statusEl.textContent = '⚠ Low SpO₂';
+                        statusEl.className = 'ox-vital-status ox-status-critical';
+                    } else if (value < 98) {
+                        statusEl.textContent = '⚠ Check';
+                        statusEl.className = 'ox-vital-status ox-status-warning';
+                    } else {
+                        statusEl.textContent = '✓ Normal';
+                        statusEl.className = 'ox-vital-status ox-status-normal';
+                    }
+                }
+            }
+        }
+        
         
         function drawChart() {
             const width = canvas.width;
@@ -1252,23 +1623,6 @@ String SensythingWiFi::generateDashboardHTML() {
                     </div>
                 `;
             }
-        }
-        
-        function updateChart(data) {
-            data.ch.forEach((value, i) => {
-                if (value !== null && i < channelData.length) {
-                    channelData[i].push({
-                        x: data.cnt,
-                        y: value
-                    });
-                    
-                    if (channelData[i].length > maxDataPoints) {
-                        channelData[i].shift();
-                    }
-                }
-            });
-            
-            drawChart();
         }
         
         function updateChannelValues(channels) {
