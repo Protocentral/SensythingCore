@@ -5,18 +5,16 @@
 
 ![Sensything](assets/sensything_logo.png)
 
-A unified platform library for the SensythingES3 family of ESP32-S3 sensor boards from Protocentral Electronics.
-
-![Sensything Boards](assets/sensything_boards.jpg)
-
 ## Overview
 
-The SensythingES3 library provides a consistent, modular API for all SensythingES3 boards, including:
+A unified platform library for the SensythingES3 family of ESP32-S3 sensor boards from Protocentral Electronics. The SensythingES3 library provides a consistent, modular API for all SensythingES3 boards, including:
 
 - **SensythingCAP**: 4-channel capacitance measurement using FDC1004 
 - **SensythingOX**: PPG/SpO2/HR measurement using AFE4400
 
 All boards share common ESP32-S3 hardware and communication infrastructure while supporting board-specific sensors through inheritance-based polymorphism.
+
+![Sensything Boards](assets/sensything_boards.jpg)
 
 ## Features
 
