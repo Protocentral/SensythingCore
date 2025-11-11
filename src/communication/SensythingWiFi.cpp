@@ -16,9 +16,11 @@ SensythingWiFi* SensythingWiFi::instance = nullptr;
 SensythingWiFi::SensythingWiFi() {
     pWebServer = nullptr;
     pWebSocket = nullptr;
+    pDNSServer = nullptr;
     wifiMode = SENSYTHING_WIFI_MODE_AP;
     clientCount = 0;
     initialized = false;
+    captivePortalActive = false;
     instance = this;  // Set static instance for callbacks
 }
 
@@ -28,6 +30,9 @@ SensythingWiFi::~SensythingWiFi() {
     }
     if (pWebServer) {
         delete pWebServer;
+    }
+    if (pDNSServer) {
+        delete pDNSServer;
     }
     if (initialized) {
         WiFi.disconnect(true);
@@ -68,6 +73,20 @@ bool SensythingWiFi::initAP(String ssid, String password, const BoardConfig& con
     IPAddress IP = WiFi.softAPIP();
     Serial.print(String(EMOJI_SUCCESS) + " AP started. IP: ");
     Serial.println(IP);
+    Serial.flush();
+    
+    // Small delay before mDNS
+    delay(100);
+    
+    // Start mDNS responder for AP mode
+    if (MDNS.begin("sensything")) {
+        Serial.println(String(EMOJI_SUCCESS) + " mDNS responder started: sensything.local");
+        MDNS.addService("http", "tcp", 80);
+        MDNS.addService("ws", "tcp", 81);
+    } else {
+        Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
+    }
+    Serial.flush();
     
     // Create web server (port 80)
     pWebServer = new WebServer(80);
@@ -88,6 +107,16 @@ bool SensythingWiFi::initAP(String ssid, String password, const BoardConfig& con
     Serial.println(String(EMOJI_SUCCESS) + " WebSocket server started on port 81");
     Serial.print(String(EMOJI_INFO) + " Static instance pointer: ");
     Serial.println(instance ? "SET" : "NULL");
+    
+    // Setup captive portal DNS redirect
+    if (!pDNSServer) {
+        pDNSServer = new DNSServer();
+    }
+    // Redirect all DNS requests to AP IP address (192.168.4.1)
+    pDNSServer->setErrorReplyCode(DNSReplyCode::NoError);
+    pDNSServer->start(53, "*", IP);  // Port 53, catch all domains, AP IP
+    captivePortalActive = true;
+    Serial.println(String(EMOJI_SUCCESS) + " Captive portal DNS started on port 53");
     
     Serial.println(String(EMOJI_INFO) + " Connect to WiFi and open: http://" + IP.toString());
     Serial.println(String(EMOJI_INFO) + " WebSocket URL: ws://" + IP.toString() + ":81/");
@@ -128,6 +157,9 @@ bool SensythingWiFi::initStation(String ssid, String password, const BoardConfig
     IPAddress IP = WiFi.localIP();
     Serial.print(String(EMOJI_SUCCESS) + " Connected! IP: ");
     Serial.println(IP);
+    Serial.flush();
+    
+    delay(100);
     
     // Start mDNS responder
     if (MDNS.begin("sensything")) {
@@ -135,8 +167,9 @@ bool SensythingWiFi::initStation(String ssid, String password, const BoardConfig
         MDNS.addService("http", "tcp", 80);
         MDNS.addService("ws", "tcp", 81);
     } else {
-        Serial.println(String(EMOJI_WARNING) + " mDNS failed to start");
+        Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
     }
+    Serial.flush();
     
     // Create web server (port 80)
     pWebServer = new WebServer(80);
@@ -235,19 +268,25 @@ bool SensythingWiFi::initAPStation(String apSSID, String apPassword, String staS
             if (savedSSID.length() == 0 || savedSSID != staSSID) {
                 saveCredentials(staSSID, staPassword);
             }
-            
-            // Start mDNS
-            if (MDNS.begin("sensything")) {
-                Serial.println(String(EMOJI_SUCCESS) + " mDNS: sensything.local");
-                MDNS.addService("http", "tcp", 80);
-                MDNS.addService("ws", "tcp", 81);
-            }
         } else {
             Serial.println(String(EMOJI_WARNING) + " Station connection failed, AP-only mode");
         }
     } else {
         Serial.println(String(EMOJI_INFO) + " No Station credentials, AP-only mode");
     }
+    
+    Serial.flush();
+    delay(100);
+    
+    // Start mDNS responder once, after WiFi is configured
+    if (MDNS.begin("sensything")) {
+        Serial.println(String(EMOJI_SUCCESS) + " mDNS: sensything.local");
+        MDNS.addService("http", "tcp", 80);
+        MDNS.addService("ws", "tcp", 81);
+    } else {
+        Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
+    }
+    Serial.flush();
     
     // Create web server
     pWebServer = new WebServer(80);
@@ -260,6 +299,16 @@ bool SensythingWiFi::initAPStation(String apSSID, String apPassword, String staS
     pWebSocket->onEvent(webSocketEventStatic);
     pWebSocket->begin();
     Serial.println(String(EMOJI_SUCCESS) + " WebSocket server started on port 81");
+    
+    // Setup captive portal DNS redirect
+    if (!pDNSServer) {
+        pDNSServer = new DNSServer();
+    }
+    // Redirect all DNS requests to AP IP address
+    pDNSServer->setErrorReplyCode(DNSReplyCode::NoError);
+    pDNSServer->start(53, "*", apIP);
+    captivePortalActive = true;
+    Serial.println(String(EMOJI_SUCCESS) + " Captive portal DNS started on port 53");
     
     Serial.println(String(EMOJI_INFO) + " Configuration portal: http://" + apIP.toString());
     if (WiFi.status() == WL_CONNECTED) {
@@ -288,16 +337,22 @@ bool SensythingWiFi::connectToNetwork(String ssid, String password) {
         IPAddress ip = WiFi.localIP();
         Serial.print(String(EMOJI_SUCCESS) + " Connected! IP: ");
         Serial.println(ip);
+        Serial.flush();
         
         // Save credentials to NVS for auto-connect on next boot
         saveCredentials(ssid, password);
+        
+        delay(100);
         
         // Start/restart mDNS
         if (MDNS.begin("sensything")) {
             Serial.println(String(EMOJI_SUCCESS) + " mDNS: sensything.local");
             MDNS.addService("http", "tcp", 80);
             MDNS.addService("ws", "tcp", 81);
+        } else {
+            Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
         }
+        Serial.flush();
         
         return true;
     }
@@ -357,6 +412,11 @@ bool SensythingWiFi::hasStoredCredentials() {
 void SensythingWiFi::update() {
     if (!initialized) {
         return;
+    }
+    
+    // Handle DNS requests for captive portal
+    if (captivePortalActive && pDNSServer) {
+        pDNSServer->processNextRequest();
     }
     
     // Handle HTTP requests
@@ -590,9 +650,50 @@ void SensythingWiFi::setupWebServer() {
         pWebServer->send(200, "application/json", json);
     });
     
+    // ========================================================================
+    // Captive Portal Detection Endpoints
+    // ========================================================================
+    
+    // Apple Captive Portal detection - must return 200 OK with NO redirect
+    pWebServer->on("/hotspot-detect.html", [this]() {
+        pWebServer->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        pWebServer->sendHeader("Pragma", "no-cache");
+        pWebServer->sendHeader("Expires", "0");
+        pWebServer->send(200, "text/plain", "Success");
+    });
+    
+    // Apple Captive Portal alternative endpoint
+    pWebServer->on("/Library/Test/Success.html", [this]() {
+        pWebServer->send(200, "text/plain", "Success");
+    });
+    
+    // Windows NCSI (Network Connectivity Status Indicator) endpoint
+    pWebServer->on("/ncsi.txt", [this]() {
+        pWebServer->send(200, "text/plain", "Microsoft NCSI");
+    });
+    
+    // Android CaptivePortalCheck endpoint
+    pWebServer->on("/generate_204", [this]() {
+        pWebServer->send(204);  // 204 No Content
+    });
+    
+    // Generic captive.apple.com detection
+    pWebServer->on("/captive.apple.com", [this]() {
+        pWebServer->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        pWebServer->send(200, "text/plain", "Success");
+    });
+    
+    // All other paths redirect to dashboard for captive portal
     // 404 handler
     pWebServer->onNotFound([this]() {
-        pWebServer->send(404, "text/plain", "404: Not found");
+        // For captive portal, redirect to dashboard instead of 404
+        String redirectURL = "http://";
+        redirectURL += WiFi.softAPIP().toString();
+        redirectURL += "/dashboard";
+        
+        pWebServer->sendHeader("Location", redirectURL);
+        pWebServer->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        pWebServer->send(302, "text/plain", "");
     });
 }
 
@@ -613,11 +714,11 @@ String SensythingWiFi::generateDashboardHTML() {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             margin: 0;
             padding: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             color: #333;
         }
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             background: white;
             border-radius: 12px;
@@ -761,42 +862,127 @@ String SensythingWiFi::generateDashboardHTML() {
             width: 100%;
             height: 100%;
         }
+        
+        /* ===== SIDE-BY-SIDE LAYOUT FOR DESKTOP ===== */
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            align-items: start;
+        }
+        
+        .chart-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            max-height: 600px;
+            padding-right: 8px;
+        }
+        
+        /* Scrollbar styling for right panel */
+        .right-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .right-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .right-panel::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 10px;
+        }
+        
+        .right-panel::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        
+        /* Responsive: Stack on smaller screens */
+        @media (max-width: 1200px) {
+            .content-wrapper {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-container {
+                height: 400px;
+            }
+            
+            .right-panel {
+                max-height: none;
+            }
+        }
+        
         /* ===== CHANNEL VALUES GRID ===== */
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin-bottom: 15px;
         }
+        
+        /* For right panel, show cards in 2x2 grid */
+        .right-panel .info-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        @media (max-width: 1400px) {
+            .info-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            }
+        }
         .info-card {
             padding: 12px;
-            background: #f9f9f9;
-            border-radius: 6px;
-            border-left: 3px solid #667eea;
+            background: linear-gradient(135deg, #f9f9f9 0%, #f0f0f0 100%);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            border-right: 1px solid #e0e0e0;
             text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+        }
+        .info-card:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+            transform: translateY(-2px);
         }
         .info-label {
             font-size: 11px;
-            color: #666;
+            color: #888;
             margin-bottom: 4px;
             text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
         .info-value {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: bold;
-            color: #333;
+            color: #667eea;
+            line-height: 1.2;
+        }
+        .info-unit {
+            font-size: 10px;
+            color: #999;
+            margin-top: 2px;
         }
         /* ===== CONFIGURATION PANEL (COLLAPSIBLE) ===== */
         .config-panel {
             border: 1px solid #e0e0e0;
             border-radius: 8px;
             background: #f9f9f9;
-            margin-bottom: 15px;
+            margin-bottom: 0;
             overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         .config-header {
             padding: 12px;
-            background: #f0f0f0;
+            background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
             border-bottom: 1px solid #e0e0e0;
             cursor: pointer;
             display: flex;
@@ -1037,9 +1223,23 @@ String SensythingWiFi::generateDashboardHTML() {
     <div class="container">
         <!-- HEADER -->
         <div class="header">
-            <div>
-                <h1>🎛️ Sensything</h1>
-                <p class="subtitle">Real-time Sensor Monitoring</p>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <svg width="120" height="30" viewBox="0 0 661.01 135.5" xmlns="http://www.w3.org/2000/svg">
+                    <style>
+                        .cls-1 { fill: #e3031a; }
+                        .cls-2 { fill: #404040; }
+                    </style>
+                    <path class="cls-1" d="M39.21,38.16c3.56-8.54,7.2-15.34,10.92-20.38,3.71-5.04,7.82-8.66,12.33-10.87,4.5-2.21,9.73-3.31,15.67-3.31,2.97,0,5.35.24,7.13.72v18c-.4-.09-.92-.17-1.56-.22-.65-.05-1.26-.07-1.86-.07-4.85,0-8.98,1.58-12.4,4.75s-6.76,8.59-10.02,16.27l-11.44,27.22c-3.56,8.45-7.18,15.17-10.84,20.16-3.66,4.99-7.72,8.57-12.18,10.73-4.46,2.16-9.75,3.24-15.89,3.24-1.68,0-3.32-.1-4.9-.29-1.58-.19-2.97-.43-4.16-.72v-18c1.39.38,3.12.58,5.2.58,5.05,0,9.3-1.56,12.77-4.68,3.46-3.12,6.73-8.42,9.8-15.91l11.44-27.22Z"/>
+                    <path class="cls-2" d="M124.45,105.98c-8.91,0-16.63-1.51-23.17-4.54-6.53-3.02-11.56-7.32-15.07-12.89-3.52-5.57-5.27-12.19-5.27-19.87,0-6.82,1.51-12.84,4.53-18.07,3.02-5.23,7.18-9.36,12.48-12.38,5.29-3.02,11.36-4.54,18.19-4.54,6.14,0,11.63,1.35,16.48,4.03,4.85,2.69,8.66,6.39,11.44,11.09,2.77,4.71,4.16,10.03,4.16,15.98,0,1.25-.03,2.66-.07,4.25-.05,1.58-.17,2.71-.37,3.38l-46.04,6.77c3.27,6.82,10.99,10.22,23.17,10.22,2.87,0,5.94-.26,9.21-.79,3.27-.53,6.04-1.22,8.32-2.09v16.56c-1.58.77-4.18,1.44-7.8,2.02-3.62.58-7.01.86-10.17.86ZM115.99,50.26c-4.36,0-7.92,1.27-10.69,3.82-2.77,2.54-4.46,5.98-5.05,10.3l28.51-4.32c-.59-2.97-2-5.35-4.23-7.13-2.23-1.78-5.08-2.66-8.54-2.66Z"/>
+                    <path class="cls-2" d="M159.65,36h18.42v5.62c1.78-2.4,4.21-4.32,7.28-5.76,3.07-1.44,6.48-2.16,10.25-2.16,6.83,0,12.23,2.09,16.19,6.26,3.96,4.18,5.94,9.82,5.94,16.92v46.8h-19.31v-42.19c0-6.81-3.17-10.22-9.5-10.22-2.18,0-4.23.5-6.16,1.51s-3.19,2.28-3.79,3.82v47.09h-19.31V36Z"/>
+                    <path class="cls-2" d="M232.86,86.98c2.47.58,5.02,1.03,7.65,1.37,2.62.34,5.12.5,7.5.5,3.46,0,5.94-.43,7.43-1.3s2.23-2.02,2.23-3.46c0-1.15-.5-2.25-1.49-3.31-.99-1.05-2.87-2.35-5.64-3.89l-7.87-4.46c-3.76-2.11-6.68-4.75-8.76-7.92s-3.12-6.53-3.12-10.08c0-5.95,2.52-10.75,7.57-14.4,5.05-3.65,12.03-5.47,20.94-5.47,2.67,0,5.35.12,8.02.36,2.67.24,4.95.6,6.83,1.08v15.84c-2.67-.48-5.05-.81-7.13-1.01-2.08-.19-4.16-.29-6.24-.29-3.37,0-5.74.38-7.13,1.15-1.39.77-2.08,1.73-2.08,2.88,0,.77.32,1.54.96,2.3.64.77,1.91,1.68,3.79,2.74l7.87,4.46c9.21,5.18,13.81,11.95,13.81,20.3,0,6.62-2.5,11.74-7.5,15.34-5,3.6-12.05,5.4-21.16,5.4-3.07,0-6.01-.14-8.84-.43-2.82-.29-5.37-.62-7.65-1.01v-16.7Z"/>
+                    <path class="cls-2" d="M313.95,133.92h-21.39l21.39-40.18-31.48-57.74h22.72l19.16,38.02,18.71-38.02h21.24l-50.34,97.92Z"/>
+                    <path class="cls-2" d="M394.59,103.68h-19.31v-51.55h-9.65v-16.13h9.65v-14.26l18.12-9.07h1.19v23.33h10.84v16.13h-10.84v51.55Z"/>
+                    <path class="cls-2" d="M415.23,0h19.31v40.46c1.78-2.11,4.13-3.77,7.05-4.97,2.92-1.2,6.11-1.8,9.58-1.8,6.83,0,12.23,2.09,16.19,6.26,3.96,4.18,5.94,9.82,5.94,16.92v46.8h-19.31v-42.19c0-6.81-3.17-10.22-9.5-10.22-2.18,0-4.23.5-6.16,1.51s-3.19,2.28-3.79,3.82v47.09h-19.31V0Z"/>
+                    <path class="cls-2" d="M490.45,20.59c-2.23-2.11-3.34-4.8-3.34-8.06s1.11-6.07,3.34-8.14c2.23-2.06,5.07-3.1,8.54-3.1s6.31,1.03,8.54,3.1c2.23,2.07,3.34,4.78,3.34,8.14s-1.11,5.95-3.34,8.06c-2.23,2.11-5.07,3.17-8.54,3.17s-6.31-1.06-8.54-3.17ZM489.33,36h19.31v67.68h-19.31V36Z"/>
+                    <path class="cls-2" d="M524.97,36h18.42v5.62c1.78-2.4,4.21-4.32,7.28-5.76,3.07-1.44,6.48-2.16,10.25-2.16,6.83,0,12.23,2.09,16.19,6.26,3.96,4.18,5.94,9.82,5.94,16.92v46.8h-19.31v-42.19c0-6.81-3.17-10.22-9.5-10.22-2.18,0-4.23.5-6.16,1.51s-3.19,2.28-3.79,3.82v47.09h-19.31V36Z"/>
+                    <path class="cls-2" d="M661.01,103.97c0,10.17-3.14,17.98-9.43,23.4-6.29,5.42-15.32,8.14-27.1,8.14-1.78,0-3.81-.12-6.09-.36-2.28-.24-4.41-.53-6.39-.86-1.98-.34-3.47-.7-4.46-1.08v-16.99c2.57.67,5.25,1.2,8.02,1.58,2.77.38,5.15.58,7.13.58,12.67,0,19.01-4.46,19.01-13.39v-.72c-2.97.67-5.74,1.01-8.32,1.01-11.68,0-20.94-3.14-27.77-9.43-6.83-6.29-10.25-14.81-10.25-25.56,0-7.29,1.83-13.63,5.5-19.01,3.66-5.38,8.84-9.53,15.52-12.46,6.68-2.93,14.53-4.39,23.54-4.39,3.46,0,7.08.17,10.84.5,3.76.34,7.18.79,10.25,1.37v67.68ZM637.4,51.55c-6.73,0-12.13,1.71-16.19,5.11-4.06,3.41-6.09,7.94-6.09,13.61s1.73,9.94,5.2,13.1c3.46,3.17,8.17,4.75,14.11,4.75,2.57,0,5-.38,7.28-1.15v-35.14c-1.29-.19-2.72-.29-4.31-.29Z"/>
+                </svg>
             </div>
             <div class="status">
                 <div class="status-item">
@@ -1104,16 +1304,22 @@ String SensythingWiFi::generateDashboardHTML() {
             </div>
         </div>
         
-        <!-- CHART -->
-        <div class="chart-container">
-            <canvas id="chartCanvas"></canvas>
-        </div>
-        
-        <!-- CHANNEL VALUES -->
-        <div class="info-grid" id="channelValues"></div>
-        
-        <!-- CONFIGURATION PANEL (COLLAPSIBLE) -->
-        <div class="config-panel">
+        <!-- SIDE-BY-SIDE LAYOUT: CHART + CONFIGURATION -->
+        <div class="content-wrapper">
+            <!-- LEFT PANEL: CHART -->
+            <div class="chart-section">
+                <div class="chart-container">
+                    <canvas id="chartCanvas"></canvas>
+                </div>
+            </div>
+            
+            <!-- RIGHT PANEL: VALUES + CONFIG -->
+            <div class="right-panel">
+                <!-- CHANNEL VALUES -->
+                <div class="info-grid" id="channelValues"></div>
+                
+                <!-- CONFIGURATION PANEL (COLLAPSIBLE) -->
+                <div class="config-panel">
             <div class="config-header" onclick="toggleConfigPanel()">
                 <h3>⚙️ Configuration</h3>
                 <span class="config-toggle" id="configToggle">▼</span>
@@ -1125,7 +1331,7 @@ String SensythingWiFi::generateDashboardHTML() {
                     <select class="config-select" id="wifiSSID" onchange="updatePassword()">
                         <option value="">-- Select Network --</option>
                     </select>
-                    <button class="btn btn-sm" onclick="scanNetworks()">🔍 Scan</button>
+                    <button class="btn btn-sm" onclick="scanNetworks(event)">🔍 Scan</button>
                 </div>
                 
                 <div class="config-item">
@@ -1164,6 +1370,8 @@ String SensythingWiFi::generateDashboardHTML() {
                     <div id="apIP" style="font-family: monospace; font-size: 12px; color: #666;">--</div>
                     <div id="savedCredsInfo" style="margin-top: 8px; font-size: 11px; color: #666;"></div>
                 </div>
+            </div>
+        </div>
             </div>
         </div>
         
@@ -1672,32 +1880,65 @@ String SensythingWiFi::generateDashboardHTML() {
                 .catch(e => console.error('Status update failed:', e));
         }
         
-        function scanNetworks() {
-            const btn = event.target;
-            btn.disabled = true;
-            btn.textContent = '🔄 Scanning...';
+        function scanNetworks(event) {
+            console.log('Scan started');
+            
+            // Get the button - use event.currentTarget if available, otherwise find it
+            let btn = event ? event.currentTarget : document.querySelector('button[onclick*="scanNetworks"]');
+            if (!btn) {
+                btn = document.querySelectorAll('.btn-sm')[0]; // Fallback
+            }
+            
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '🔄 Scanning...';
+            }
+            
+            console.log('Fetching /api/wifi/scan');
             
             fetch('/api/wifi/scan')
-                .then(r => r.json())
+                .then(r => {
+                    console.log('Response status: ' + r.status);
+                    if (!r.ok) {
+                        throw new Error('HTTP error, status: ' + r.status);
+                    }
+                    return r.json();
+                })
                 .then(data => {
+                    console.log('Scan response: ' + JSON.stringify(data).substring(0, 100));
                     const select = document.getElementById('wifiSSID');
+                    if (!select) {
+                        console.error('wifiSSID select not found');
+                        return;
+                    }
+                    
                     select.innerHTML = '<option value="">-- Select Network --</option>';
                     
-                    data.networks.forEach(net => {
-                        const option = document.createElement('option');
-                        option.value = net.ssid;
-                        option.textContent = net.ssid + ' (' + net.rssi + ' dBm) ' + (net.secure ? '🔒' : '');
-                        option.dataset.secure = net.secure;
-                        select.appendChild(option);
-                    });
+                    if (data.networks && data.networks.length > 0) {
+                        console.log('Adding ' + data.networks.length + ' networks');
+                        data.networks.forEach(net => {
+                            const option = document.createElement('option');
+                            option.value = net.ssid;
+                            option.textContent = net.ssid + ' (' + net.rssi + ' dBm) ' + (net.secure ? '🔒' : '');
+                            option.dataset.secure = net.secure;
+                            select.appendChild(option);
+                        });
+                    } else {
+                        console.log('No networks found');
+                    }
                     
-                    btn.disabled = false;
-                    btn.textContent = '🔍 Scan Networks';
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = '🔍 Scan Networks';
+                    }
                 })
                 .catch(e => {
-                    console.error('Scan failed:', e);
-                    btn.disabled = false;
-                    btn.textContent = '🔍 Scan Networks';
+                    console.error('Scan error: ' + e.message);
+                    console.error('Stack: ' + e.stack);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = '🔍 Scan Networks';
+                    }
                 });
         }
         
@@ -1793,12 +2034,25 @@ String SensythingWiFi::generateDashboardHTML() {
                 .catch(e => console.error('Command failed:', e));
         }
         
+        function autoScanNetworks() {
+            // Auto-scan on page load - create a mock event for the button
+            const mockEvent = {
+                currentTarget: document.querySelector('button[onclick="scanNetworks(event)"]') || {
+                    disabled: false,
+                    textContent: '🔍 Scan',
+                    setAttribute: function() {},
+                    removeAttribute: function() {}
+                }
+            };
+            scanNetworks(mockEvent);
+        }
+        
         // Update system info every 5 seconds
         setInterval(updateSystemInfo, 5000);
         updateSystemInfo();
         
         // Auto-scan networks on load
-        setTimeout(scanNetworks, 1000);
+        setTimeout(autoScanNetworks, 1000);
     </script>
 </body>
 </html>

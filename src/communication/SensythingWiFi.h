@@ -16,6 +16,7 @@
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 #include <Preferences.h>
 #include "../core/SensythingTypes.h"
 #include "../core/SensythingConfig.h"
@@ -149,6 +150,8 @@ private:
     bool initialized;
     BoardConfig boardConfig;
     Preferences preferences;  // For persistent WiFi credential storage
+    DNSServer* pDNSServer;    // For captive portal DNS redirect
+    bool captivePortalActive; // Track if captive portal is running
     
     // Web server handlers
     void handleRoot();

@@ -6,12 +6,18 @@
 // ⚠️  BUILD NOTE: This sketch includes the full embedded web dashboard and exceeds
 //    the default ESP32-S3 flash partition size (1.3MB). 
 //    
-//    For LOCAL compilation in Arduino IDE, change Partition Scheme:
-//       Tools > Partition Scheme > "Huge APP (3MB No OTA/1MB SPIFFS)"
+//    REQUIRED Arduino IDE Settings:
+//       Board: ESP32S3 Dev Module
+//       USB Mode: Hardware CDC and JTAG
+//       USB CDC on Boot: Enabled
+//       Upload Mode: UART0 / Hardware CDC
+//       PSRAM: QSPI PSRAM
+//       Partition Scheme: Huge APP (3MB No OTA/1MB SPIFFS)
+//       Upload Speed: 921600
 //    
 //    For ARDUINO-CLI or CI/CD, use the --board-options flag:
 //       arduino-cli compile -b esp32:esp32:esp32s3 \
-//         --board-options "PartitionScheme=huge_app" \
+//         --board-options "PartitionScheme=huge_app,PSRAM=enabled,CDCOnBoot=cdc,USBMode=hwcdc" \
 //         examples/03.Applications/OX_WiFi_App/
 //    
 //    GitHub Actions automatically uses this approach (see .github/workflows/compile-examples.yml)

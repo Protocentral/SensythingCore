@@ -475,6 +475,20 @@ void SensythingCore::processCommand(String command) {
             Serial.println(String(EMOJI_ERROR) + " Usage: set_rate <milliseconds>");
         }
         
+    } else if (command == "forget_wifi" || command == "clear_wifi") {
+        if (wifiModule) {
+            Serial.println(String(EMOJI_INFO) + " Clearing saved WiFi credentials...");
+            bool success = wifiModule->clearCredentials();
+            if (success) {
+                Serial.println(String(EMOJI_SUCCESS) + " WiFi credentials cleared!");
+                Serial.println(String(EMOJI_INFO) + " Board will restart in AP-only mode on next boot");
+            } else {
+                Serial.println(String(EMOJI_ERROR) + " Failed to clear credentials");
+            }
+        } else {
+            Serial.println(String(EMOJI_ERROR) + " WiFi module not initialized");
+        }
+        
     } else {
         Serial.printf("%s Unknown command: '%s' (type 'help' for commands)\n", 
                      EMOJI_ERROR, command.c_str());
@@ -492,6 +506,7 @@ void SensythingCore::printHelp() {
     Serial.println("toggle_sd       - Toggle SD Card logging");
     Serial.println("rotate_file     - Force new SD file");
     Serial.println("set_rate <ms>   - Set sample rate (20-10000)");
+    Serial.println("forget_wifi     - Clear saved WiFi credentials");
     Serial.println("help            - Show this help");
     Serial.println("=================================");
 }
