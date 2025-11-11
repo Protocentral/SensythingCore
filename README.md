@@ -9,8 +9,8 @@
 
 A unified platform library for the SensythingES3 family of ESP32-S3 sensor boards from Protocentral Electronics. The SensythingES3 library provides a consistent, modular API for all SensythingES3 boards, including:
 
-- [**SensythingCAP**: 4-channel capacitance measurement board using FDC1004](https://github.com/Protocentral/protocentral_sensything_hardware/blob/a9676be901be1587d2ffdf0083a7e478a88bb57d/hardware/SensythingCAP-v1-r2/pc_sensything_cap_v1_r2_schematic.pdf)
-- [**SensythingOX**: PPG/SpO2/HR measurement board using AFE4400](https://github.com/Protocentral/protocentral_sensything_hardware/blob/a9676be901be1587d2ffdf0083a7e478a88bb57d/hardware/SensythingOX-v1-r2/sensythingOX_v1_r2_schematic.pdf)
+- [**SensythingCAP**: 4-channel capacitance measurement board using FDC1004](https://protocentral.com/product/protocentral-sensything-cap-wireless-pulse-sensor-kit-based-on-afe4400-esp32/)
+- [**SensythingOX**: PPG/SpO2/HR measurement board using AFE4400](https://protocentral.com/product/protocentral-sensythingox-wireless-pulse-sensor/)
 
 
 All boards share common ESP32-S3 hardware and communication infrastructure while supporting board-specific sensors through inheritance-based polymorphism.
