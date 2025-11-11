@@ -11,9 +11,10 @@
 #include "SensythingWiFi.h"
 
 // Static instance for callback
-SensythingWiFi* SensythingWiFi::instance = nullptr;
+SensythingWiFi *SensythingWiFi::instance = nullptr;
 
-SensythingWiFi::SensythingWiFi() {
+SensythingWiFi::SensythingWiFi()
+{
     pWebServer = nullptr;
     pWebSocket = nullptr;
     pDNSServer = nullptr;
@@ -21,287 +22,329 @@ SensythingWiFi::SensythingWiFi() {
     clientCount = 0;
     initialized = false;
     captivePortalActive = false;
-    instance = this;  // Set static instance for callbacks
+    instance = this; // Set static instance for callbacks
 }
 
-SensythingWiFi::~SensythingWiFi() {
-    if (pWebSocket) {
+SensythingWiFi::~SensythingWiFi()
+{
+    if (pWebSocket)
+    {
         delete pWebSocket;
     }
-    if (pWebServer) {
+    if (pWebServer)
+    {
         delete pWebServer;
     }
-    if (pDNSServer) {
+    if (pDNSServer)
+    {
         delete pDNSServer;
     }
-    if (initialized) {
+    if (initialized)
+    {
         WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
     }
 }
 
-bool SensythingWiFi::initAP(String ssid, String password, const BoardConfig& config) {
-    if (initialized) {
+bool SensythingWiFi::initAP(String ssid, String password, const BoardConfig &config)
+{
+    if (initialized)
+    {
         Serial.println(String(EMOJI_WARNING) + " WiFi already initialized");
         return true;
     }
-    
+
     this->boardConfig = config;
     this->wifiMode = SENSYTHING_WIFI_MODE_AP;
-    
+
     Serial.print(String(EMOJI_INFO) + " Starting WiFi AP: ");
     Serial.println(ssid);
-    
+
     // Configure AP
     WiFi.mode(WIFI_AP);
     bool success;
-    
-    if (password.length() >= 8) {
+
+    if (password.length() >= 8)
+    {
         success = WiFi.softAP(ssid.c_str(), password.c_str());
         Serial.print(String(EMOJI_INFO) + " Password: ");
         Serial.println(password);
-    } else {
-        success = WiFi.softAP(ssid.c_str());  // Open network
+    }
+    else
+    {
+        success = WiFi.softAP(ssid.c_str()); // Open network
         Serial.println(String(EMOJI_WARNING) + " Open network (no password)");
     }
-    
-    if (!success) {
+
+    if (!success)
+    {
         Serial.println(String(EMOJI_ERROR) + " Failed to start AP");
         return false;
     }
-    
+
     IPAddress IP = WiFi.softAPIP();
     Serial.print(String(EMOJI_SUCCESS) + " AP started. IP: ");
     Serial.println(IP);
     Serial.flush();
-    
+
     // Small delay before mDNS
     delay(100);
-    
+
     // Start mDNS responder for AP mode
-    if (MDNS.begin("sensything")) {
+    if (MDNS.begin("sensything"))
+    {
         Serial.println(String(EMOJI_SUCCESS) + " mDNS responder started: sensything.local");
         MDNS.addService("http", "tcp", 80);
         MDNS.addService("ws", "tcp", 81);
-    } else {
+    }
+    else
+    {
         Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
     }
     Serial.flush();
-    
+
     // Create web server (port 80)
     pWebServer = new WebServer(80);
     setupWebServer();
     pWebServer->begin();
     Serial.println(String(EMOJI_SUCCESS) + " Web server started on port 80");
-    
+
     // Create WebSocket server (port 81)
     pWebSocket = new WebSocketsServer(81);
     Serial.println(String(EMOJI_INFO) + " Created WebSocket server object");
-    
+
     // Set event handler BEFORE begin()
     pWebSocket->onEvent(webSocketEventStatic);
     Serial.println(String(EMOJI_INFO) + " WebSocket event handler registered");
-    
+
     // Start WebSocket server
     pWebSocket->begin();
     Serial.println(String(EMOJI_SUCCESS) + " WebSocket server started on port 81");
     Serial.print(String(EMOJI_INFO) + " Static instance pointer: ");
     Serial.println(instance ? "SET" : "NULL");
-    
+
     // Setup captive portal DNS redirect
-    if (!pDNSServer) {
+    if (!pDNSServer)
+    {
         pDNSServer = new DNSServer();
     }
     // Redirect all DNS requests to AP IP address (192.168.4.1)
     pDNSServer->setErrorReplyCode(DNSReplyCode::NoError);
-    pDNSServer->start(53, "*", IP);  // Port 53, catch all domains, AP IP
+    pDNSServer->start(53, "*", IP); // Port 53, catch all domains, AP IP
     captivePortalActive = true;
     Serial.println(String(EMOJI_SUCCESS) + " Captive portal DNS started on port 53");
-    
+
     Serial.println(String(EMOJI_INFO) + " Connect to WiFi and open: http://" + IP.toString());
     Serial.println(String(EMOJI_INFO) + " WebSocket URL: ws://" + IP.toString() + ":81/");
-    
+
     initialized = true;
     return true;
 }
 
-bool SensythingWiFi::initStation(String ssid, String password, const BoardConfig& config) {
-    if (initialized) {
+bool SensythingWiFi::initStation(String ssid, String password, const BoardConfig &config)
+{
+    if (initialized)
+    {
         Serial.println(String(EMOJI_WARNING) + " WiFi already initialized");
         return true;
     }
-    
+
     this->boardConfig = config;
     this->wifiMode = SENSYTHING_WIFI_MODE_STA;
-    
+
     Serial.print(String(EMOJI_INFO) + " Connecting to WiFi: ");
     Serial.println(ssid);
-    
+
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), password.c_str());
-    
+
     // Wait for connection (30 second timeout)
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 60) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 60)
+    {
         delay(500);
         Serial.print(".");
         attempts++;
     }
     Serial.println();
-    
-    if (WiFi.status() != WL_CONNECTED) {
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
         Serial.println(String(EMOJI_ERROR) + " WiFi connection failed");
         return false;
     }
-    
+
     IPAddress IP = WiFi.localIP();
     Serial.print(String(EMOJI_SUCCESS) + " Connected! IP: ");
     Serial.println(IP);
     Serial.flush();
-    
+
     delay(100);
-    
+
     // Start mDNS responder
-    if (MDNS.begin("sensything")) {
+    if (MDNS.begin("sensything"))
+    {
         Serial.println(String(EMOJI_SUCCESS) + " mDNS responder started: sensything.local");
         MDNS.addService("http", "tcp", 80);
         MDNS.addService("ws", "tcp", 81);
-    } else {
+    }
+    else
+    {
         Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
     }
     Serial.flush();
-    
+
     // Create web server (port 80)
     pWebServer = new WebServer(80);
     setupWebServer();
     pWebServer->begin();
     Serial.println(String(EMOJI_SUCCESS) + " Web server started on port 80");
-    
+
     // Create WebSocket server (port 81)
     pWebSocket = new WebSocketsServer(81);
     Serial.println(String(EMOJI_INFO) + " Created WebSocket server object");
-    
+
     // Set event handler BEFORE begin()
     pWebSocket->onEvent(webSocketEventStatic);
     Serial.println(String(EMOJI_INFO) + " WebSocket event handler registered");
-    
+
     // Start WebSocket server
     pWebSocket->begin();
     Serial.println(String(EMOJI_SUCCESS) + " WebSocket server started on port 81");
     Serial.print(String(EMOJI_INFO) + " Static instance pointer: ");
     Serial.println(instance ? "SET" : "NULL");
-    
+
     Serial.println(String(EMOJI_INFO) + " Dashboard: http://sensything.local (or http://" + IP.toString() + ")");
     Serial.println(String(EMOJI_INFO) + " WebSocket: ws://sensything.local:81/ (or ws://" + IP.toString() + ":81/)");
-    
+
     initialized = true;
     return true;
 }
 
-bool SensythingWiFi::initAPStation(String apSSID, String apPassword, String staSSID, String staPassword, const BoardConfig& config) {
-    if (initialized) {
+bool SensythingWiFi::initAPStation(String apSSID, String apPassword, String staSSID, String staPassword, const BoardConfig &config)
+{
+    if (initialized)
+    {
         Serial.println(String(EMOJI_WARNING) + " WiFi already initialized");
         return true;
     }
-    
+
     this->boardConfig = config;
     this->wifiMode = SENSYTHING_WIFI_MODE_APSTA;
-    
+
     Serial.println(String(EMOJI_INFO) + " Starting WiFi in AP+Station mode...");
-    
+
     // Configure AP+Station mode
     WiFi.mode(WIFI_AP_STA);
-    
+
     // Start Access Point
     bool apSuccess;
-    if (apPassword.length() >= 8) {
+    if (apPassword.length() >= 8)
+    {
         apSuccess = WiFi.softAP(apSSID.c_str(), apPassword.c_str());
         Serial.print(String(EMOJI_INFO) + " AP Password: ");
         Serial.println(apPassword);
-    } else {
+    }
+    else
+    {
         apSuccess = WiFi.softAP(apSSID.c_str());
         Serial.println(String(EMOJI_WARNING) + " AP open network (no password)");
     }
-    
-    if (!apSuccess) {
+
+    if (!apSuccess)
+    {
         Serial.println(String(EMOJI_ERROR) + " Failed to start AP");
         return false;
     }
-    
+
     IPAddress apIP = WiFi.softAPIP();
     Serial.print(String(EMOJI_SUCCESS) + " AP started. IP: ");
     Serial.println(apIP);
-    
+
     // Try to load saved credentials if not provided
     String savedSSID = staSSID;
     String savedPassword = staPassword;
-    
-    if (savedSSID.length() == 0) {
-        if (loadCredentials(savedSSID, savedPassword)) {
+
+    if (savedSSID.length() == 0)
+    {
+        if (loadCredentials(savedSSID, savedPassword))
+        {
             Serial.println(String(EMOJI_INFO) + " Found saved WiFi credentials");
             staSSID = savedSSID;
             staPassword = savedPassword;
         }
     }
-    
+
     // Try to connect to Station network if credentials available
-    if (staSSID.length() > 0) {
+    if (staSSID.length() > 0)
+    {
         Serial.print(String(EMOJI_INFO) + " Connecting to WiFi: ");
         Serial.println(staSSID);
-        
+
         WiFi.begin(staSSID.c_str(), staPassword.c_str());
-        
+
         int attempts = 0;
-        while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+        while (WiFi.status() != WL_CONNECTED && attempts < 30)
+        {
             delay(500);
             Serial.print(".");
             attempts++;
         }
         Serial.println();
-        
-        if (WiFi.status() == WL_CONNECTED) {
+
+        if (WiFi.status() == WL_CONNECTED)
+        {
             IPAddress staIP = WiFi.localIP();
             Serial.print(String(EMOJI_SUCCESS) + " Station connected! IP: ");
             Serial.println(staIP);
-            
+
             // Save credentials if this was a new connection
-            if (savedSSID.length() == 0 || savedSSID != staSSID) {
+            if (savedSSID.length() == 0 || savedSSID != staSSID)
+            {
                 saveCredentials(staSSID, staPassword);
             }
-        } else {
+        }
+        else
+        {
             Serial.println(String(EMOJI_WARNING) + " Station connection failed, AP-only mode");
         }
-    } else {
+    }
+    else
+    {
         Serial.println(String(EMOJI_INFO) + " No Station credentials, AP-only mode");
     }
-    
+
     Serial.flush();
     delay(100);
-    
+
     // Start mDNS responder once, after WiFi is configured
-    if (MDNS.begin("sensything")) {
+    if (MDNS.begin("sensything"))
+    {
         Serial.println(String(EMOJI_SUCCESS) + " mDNS: sensything.local");
         MDNS.addService("http", "tcp", 80);
         MDNS.addService("ws", "tcp", 81);
-    } else {
+    }
+    else
+    {
         Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
     }
     Serial.flush();
-    
+
     // Create web server
     pWebServer = new WebServer(80);
     setupWebServer();
     pWebServer->begin();
     Serial.println(String(EMOJI_SUCCESS) + " Web server started on port 80");
-    
+
     // Create WebSocket server
     pWebSocket = new WebSocketsServer(81);
     pWebSocket->onEvent(webSocketEventStatic);
     pWebSocket->begin();
     Serial.println(String(EMOJI_SUCCESS) + " WebSocket server started on port 81");
-    
+
     // Setup captive portal DNS redirect
-    if (!pDNSServer) {
+    if (!pDNSServer)
+    {
         pDNSServer = new DNSServer();
     }
     // Redirect all DNS requests to AP IP address
@@ -309,265 +352,309 @@ bool SensythingWiFi::initAPStation(String apSSID, String apPassword, String staS
     pDNSServer->start(53, "*", apIP);
     captivePortalActive = true;
     Serial.println(String(EMOJI_SUCCESS) + " Captive portal DNS started on port 53");
-    
+
     Serial.println(String(EMOJI_INFO) + " Configuration portal: http://" + apIP.toString());
-    if (WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED)
+    {
         Serial.println(String(EMOJI_INFO) + " Dashboard: http://sensything.local");
     }
-    
+
     initialized = true;
     return true;
 }
 
-bool SensythingWiFi::connectToNetwork(String ssid, String password) {
+bool SensythingWiFi::connectToNetwork(String ssid, String password)
+{
     Serial.print(String(EMOJI_INFO) + " Connecting to: ");
     Serial.println(ssid);
-    
+
     WiFi.begin(ssid.c_str(), password.c_str());
-    
+
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 40)
+    {
         delay(500);
         Serial.print(".");
         attempts++;
     }
     Serial.println();
-    
-    if (WiFi.status() == WL_CONNECTED) {
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
         IPAddress ip = WiFi.localIP();
         Serial.print(String(EMOJI_SUCCESS) + " Connected! IP: ");
         Serial.println(ip);
         Serial.flush();
-        
+
         // Save credentials to NVS for auto-connect on next boot
         saveCredentials(ssid, password);
-        
+
         delay(100);
-        
+
         // Start/restart mDNS
-        if (MDNS.begin("sensything")) {
+        if (MDNS.begin("sensything"))
+        {
             Serial.println(String(EMOJI_SUCCESS) + " mDNS: sensything.local");
             MDNS.addService("http", "tcp", 80);
             MDNS.addService("ws", "tcp", 81);
-        } else {
+        }
+        else
+        {
             Serial.println(String(EMOJI_WARNING) + " mDNS initialization skipped");
         }
         Serial.flush();
-        
+
         return true;
     }
-    
+
     Serial.println(String(EMOJI_ERROR) + " Connection failed");
     return false;
 }
 
-bool SensythingWiFi::saveCredentials(String ssid, String password) {
-    preferences.begin("wifi", false);  // false = read/write mode
+bool SensythingWiFi::saveCredentials(String ssid, String password)
+{
+    preferences.begin("wifi", false); // false = read/write mode
     preferences.putString("ssid", ssid);
     preferences.putString("password", password);
     preferences.putBool("saved", true);
     preferences.end();
-    
+
     Serial.println(String(EMOJI_SUCCESS) + " WiFi credentials saved to NVS");
     return true;
 }
 
-bool SensythingWiFi::loadCredentials(String& ssid, String& password) {
-    preferences.begin("wifi", true);  // true = read-only mode
-    
+bool SensythingWiFi::loadCredentials(String &ssid, String &password)
+{
+    preferences.begin("wifi", true); // true = read-only mode
+
     bool saved = preferences.getBool("saved", false);
-    if (!saved) {
+    if (!saved)
+    {
         preferences.end();
         return false;
     }
-    
+
     ssid = preferences.getString("ssid", "");
     password = preferences.getString("password", "");
     preferences.end();
-    
-    if (ssid.length() == 0) {
+
+    if (ssid.length() == 0)
+    {
         return false;
     }
-    
+
     Serial.println(String(EMOJI_INFO) + " Loaded saved WiFi credentials");
     return true;
 }
 
-bool SensythingWiFi::clearCredentials() {
+bool SensythingWiFi::clearCredentials()
+{
     preferences.begin("wifi", false);
     preferences.clear();
     preferences.end();
-    
+
     Serial.println(String(EMOJI_INFO) + " WiFi credentials cleared");
     return true;
 }
 
-bool SensythingWiFi::hasStoredCredentials() {
+bool SensythingWiFi::hasStoredCredentials()
+{
     preferences.begin("wifi", true);
     bool saved = preferences.getBool("saved", false);
     preferences.end();
     return saved;
 }
 
-void SensythingWiFi::update() {
-    if (!initialized) {
+void SensythingWiFi::update()
+{
+    if (!initialized)
+    {
         return;
     }
-    
+
     // Handle DNS requests for captive portal
-    if (captivePortalActive && pDNSServer) {
+    if (captivePortalActive && pDNSServer)
+    {
         pDNSServer->processNextRequest();
     }
-    
+
     // Handle HTTP requests
     pWebServer->handleClient();
-    
+
     // Handle WebSocket events
-    if (pWebSocket) {
+    if (pWebSocket)
+    {
         pWebSocket->loop();
     }
 }
 
-void SensythingWiFi::streamData(const MeasurementData& data, const BoardConfig& config) {
-    if (!initialized) {
+void SensythingWiFi::streamData(const MeasurementData &data, const BoardConfig &config)
+{
+    if (!initialized)
+    {
         return;
     }
-    
-    if (clientCount == 0) {
-        return;  // No clients connected
+
+    if (clientCount == 0)
+    {
+        return; // No clients connected
     }
-    
+
     // Format as JSON and broadcast to all WebSocket clients
     String jsonData = formatAsJSON(data, config);
     pWebSocket->broadcastTXT(jsonData);
 }
 
-String SensythingWiFi::getIPAddress() const {
-    if (wifiMode == SENSYTHING_WIFI_MODE_AP) {
+String SensythingWiFi::getIPAddress() const
+{
+    if (wifiMode == SENSYTHING_WIFI_MODE_AP)
+    {
         return WiFi.softAPIP().toString();
-    } else {
+    }
+    else
+    {
         return WiFi.localIP().toString();
     }
 }
 
-void SensythingWiFi::webSocketEventStatic(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
-    if (instance) {
+void SensythingWiFi::webSocketEventStatic(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+{
+    if (instance)
+    {
         instance->webSocketEvent(num, type, payload, length);
     }
 }
 
-void SensythingWiFi::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+void SensythingWiFi::webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+{
     Serial.print("[WS] Event type: ");
     Serial.print(type);
     Serial.print(" from client #");
     Serial.println(num);
-    
-    switch(type) {
-        case WStype_DISCONNECTED:
-            Serial.print(String(EMOJI_INFO) + " WebSocket client #");
-            Serial.print(num);
-            Serial.println(" disconnected");
-            if (clientCount > 0) clientCount--;
-            break;
-            
-        case WStype_CONNECTED:
-            {
-                IPAddress ip = pWebSocket->remoteIP(num);
-                Serial.print(String(EMOJI_SUCCESS) + " WebSocket client #");
-                Serial.print(num);
-                Serial.print(" connected from ");
-                Serial.println(ip.toString());
-                clientCount++;
-                
-                // Determine board type string
-                String boardType = "UNKNOWN";
-                String sampleRateStr = "[100]";  // Default fallback
-                
-                if (boardConfig.boardType == BOARD_TYPE_OX) {
-                    boardType = "OX";
-                    // OX runs at ~125Hz (8ms), offer range from 50-125Hz
-                    sampleRateStr = "[8,10,12,16,20]";  // ms periods
-                } else if (boardConfig.boardType == BOARD_TYPE_CAP) {
-                    boardType = "CAP";
-                    // CAP typically 10Hz, offer 2-20Hz range
-                    sampleRateStr = "[50,100,200,500]";  // ms periods
-                }
-                
-                // Send enhanced init message with board detection info
-                String welcome = "{\"type\":\"init\","
-                               "\"board\":\"" + boardType + "\","
-                               "\"boardName\":\"" + String(boardConfig.boardName) + "\","
-                               "\"channels\":" + String(boardConfig.channelCount) + ","
-                               "\"sampleRates\":" + sampleRateStr + ","
-                               "\"sampleInterval\":" + String(boardConfig.minSampleInterval) + "}";
-                
-                pWebSocket->sendTXT(num, welcome);
-                
-                Serial.println(String(EMOJI_INFO) + " Sent board info: " + boardType);
-            }
-            break;
-            
-        case WStype_TEXT:
-            // Handle commands from web dashboard
-            Serial.print(String(EMOJI_INFO) + " WebSocket message from #");
-            Serial.print(num);
-            Serial.print(": ");
-            Serial.println((char*)payload);
-            // TODO: Implement command handling (start/stop, set rate, etc.)
-            break;
-            
-        case WStype_ERROR:
-            Serial.print(String(EMOJI_ERROR) + " WebSocket error on #");
-            Serial.println(num);
-            break;
-            
-        default:
-            break;
+
+    switch (type)
+    {
+    case WStype_DISCONNECTED:
+        Serial.print(String(EMOJI_INFO) + " WebSocket client #");
+        Serial.print(num);
+        Serial.println(" disconnected");
+        if (clientCount > 0)
+            clientCount--;
+        break;
+
+    case WStype_CONNECTED:
+    {
+        IPAddress ip = pWebSocket->remoteIP(num);
+        Serial.print(String(EMOJI_SUCCESS) + " WebSocket client #");
+        Serial.print(num);
+        Serial.print(" connected from ");
+        Serial.println(ip.toString());
+        clientCount++;
+
+        // Determine board type string
+        String boardType = "UNKNOWN";
+        String sampleRateStr = "[100]"; // Default fallback
+
+        if (boardConfig.boardType == BOARD_TYPE_OX)
+        {
+            boardType = "OX";
+            // OX runs at ~125Hz (8ms), offer range from 50-125Hz
+            sampleRateStr = "[8,10,12,16,20]"; // ms periods
+        }
+        else if (boardConfig.boardType == BOARD_TYPE_CAP)
+        {
+            boardType = "CAP";
+            // CAP typically 10Hz, offer 2-20Hz range
+            sampleRateStr = "[50,100,200,500]"; // ms periods
+        }
+
+        // Send enhanced init message with board detection info
+        String welcome = "{\"type\":\"init\","
+                         "\"board\":\"" +
+                         boardType + "\","
+                                     "\"boardName\":\"" +
+                         String(boardConfig.boardName) + "\","
+                                                         "\"channels\":" +
+                         String(boardConfig.channelCount) + ","
+                                                            "\"sampleRates\":" +
+                         sampleRateStr + ","
+                                         "\"sampleInterval\":" +
+                         String(boardConfig.minSampleInterval) + "}";
+
+        pWebSocket->sendTXT(num, welcome);
+
+        Serial.println(String(EMOJI_INFO) + " Sent board info: " + boardType);
+    }
+    break;
+
+    case WStype_TEXT:
+        // Handle commands from web dashboard
+        Serial.print(String(EMOJI_INFO) + " WebSocket message from #");
+        Serial.print(num);
+        Serial.print(": ");
+        Serial.println((char *)payload);
+        // TODO: Implement command handling (start/stop, set rate, etc.)
+        break;
+
+    case WStype_ERROR:
+        Serial.print(String(EMOJI_ERROR) + " WebSocket error on #");
+        Serial.println(num);
+        break;
+
+    default:
+        break;
     }
 }
 
-String SensythingWiFi::formatAsJSON(const MeasurementData& data, const BoardConfig& config) {
+String SensythingWiFi::formatAsJSON(const MeasurementData &data, const BoardConfig &config)
+{
     // Lightweight JSON formatting (no library needed for simple structure)
     String json = "{\"ts\":";
     json += String(data.timestamp);
     json += ",\"cnt\":";
     json += String(data.measurement_count);
     json += ",\"ch\":[";
-    
-    for (int i = 0; i < config.channelCount; i++) {
-        if (i > 0) json += ",";
-        
+
+    for (int i = 0; i < config.channelCount; i++)
+    {
+        if (i > 0)
+            json += ",";
+
         // Check if channel is valid
         bool valid = !(data.status_flags & (1 << i));
-        
-        if (valid) {
-            json += String(data.channels[i], 4);  // 4 decimal places
-        } else {
+
+        if (valid)
+        {
+            json += String(data.channels[i], 4); // 4 decimal places
+        }
+        else
+        {
             json += "null";
         }
     }
-    
+
     json += "],\"flags\":";
     json += String(data.status_flags);
     json += "}";
-    
+
     return json;
 }
 
-void SensythingWiFi::setupWebServer() {
+void SensythingWiFi::setupWebServer()
+{
     // Root page - redirect to dashboard
-    pWebServer->on("/", [this]() {
+    pWebServer->on("/", [this]()
+                   {
         pWebServer->sendHeader("Location", "/dashboard");
-        pWebServer->send(302);
-    });
-    
+        pWebServer->send(302); });
+
     // Dashboard page
-    pWebServer->on("/dashboard", [this]() {
-        pWebServer->send(200, "text/html", generateDashboardHTML());
-    });
-    
+    pWebServer->on("/dashboard", [this]()
+                   { pWebServer->send(200, "text/html", generateDashboardHTML()); });
+
     // API endpoint for status
-    pWebServer->on("/api/status", [this]() {
+    pWebServer->on("/api/status", [this]()
+                   {
         String json = "{\"connected\":true,\"clients\":";
         json += String(clientCount);
         json += ",\"board\":\"" + String(boardConfig.channels[0].label) + "\"";
@@ -582,11 +669,11 @@ void SensythingWiFi::setupWebServer() {
         json += ",\"savedCreds\":";
         json += hasStoredCredentials() ? "true" : "false";
         json += "}";
-        pWebServer->send(200, "application/json", json);
-    });
-    
+        pWebServer->send(200, "application/json", json); });
+
     // API endpoint for WiFi configuration
-    pWebServer->on("/api/wifi/connect", HTTP_POST, [this]() {
+    pWebServer->on("/api/wifi/connect", HTTP_POST, [this]()
+                   {
         if (!pWebServer->hasArg("ssid") || !pWebServer->hasArg("password")) {
             pWebServer->send(400, "application/json", "{\"success\":false,\"error\":\"Missing parameters\"}");
             return;
@@ -605,11 +692,11 @@ void SensythingWiFi::setupWebServer() {
         }
         json += "}";
         
-        pWebServer->send(200, "application/json", json);
-    });
-    
+        pWebServer->send(200, "application/json", json); });
+
     // API endpoint for WiFi scan
-    pWebServer->on("/api/wifi/scan", [this]() {
+    pWebServer->on("/api/wifi/scan", [this]()
+                   {
         Serial.println(String(EMOJI_INFO) + " WiFi scan request");
         int n = WiFi.scanNetworks();
         
@@ -623,11 +710,11 @@ void SensythingWiFi::setupWebServer() {
         }
         json += "]}";
         
-        pWebServer->send(200, "application/json", json);
-    });
-    
+        pWebServer->send(200, "application/json", json); });
+
     // API endpoint for sending commands to device
-    pWebServer->on("/api/command", HTTP_POST, [this]() {
+    pWebServer->on("/api/command", HTTP_POST, [this]()
+                   {
         if (!pWebServer->hasArg("cmd")) {
             pWebServer->send(400, "application/json", "{\"success\":false}");
             return;
@@ -638,54 +725,53 @@ void SensythingWiFi::setupWebServer() {
         
         // Commands will be handled by the main application
         // For now, just acknowledge receipt
-        pWebServer->send(200, "application/json", "{\"success\":true,\"cmd\":\"" + cmd + "\"}");
-    });
-    
+        pWebServer->send(200, "application/json", "{\"success\":true,\"cmd\":\"" + cmd + "\"}"); });
+
     // API endpoint to clear saved credentials
-    pWebServer->on("/api/wifi/forget", HTTP_POST, [this]() {
+    pWebServer->on("/api/wifi/forget", HTTP_POST, [this]()
+                   {
         bool success = clearCredentials();
         String json = "{\"success\":";
         json += success ? "true" : "false";
         json += "}";
-        pWebServer->send(200, "application/json", json);
-    });
-    
+        pWebServer->send(200, "application/json", json); });
+
     // ========================================================================
     // Captive Portal Detection Endpoints
     // ========================================================================
-    
+
     // Apple Captive Portal detection - must return 200 OK with NO redirect
-    pWebServer->on("/hotspot-detect.html", [this]() {
+    pWebServer->on("/hotspot-detect.html", [this]()
+                   {
         pWebServer->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         pWebServer->sendHeader("Pragma", "no-cache");
         pWebServer->sendHeader("Expires", "0");
-        pWebServer->send(200, "text/plain", "Success");
-    });
-    
+        pWebServer->send(200, "text/plain", "Success"); });
+
     // Apple Captive Portal alternative endpoint
-    pWebServer->on("/Library/Test/Success.html", [this]() {
-        pWebServer->send(200, "text/plain", "Success");
-    });
-    
+    pWebServer->on("/Library/Test/Success.html", [this]()
+                   { pWebServer->send(200, "text/plain", "Success"); });
+
     // Windows NCSI (Network Connectivity Status Indicator) endpoint
-    pWebServer->on("/ncsi.txt", [this]() {
-        pWebServer->send(200, "text/plain", "Microsoft NCSI");
-    });
-    
+    pWebServer->on("/ncsi.txt", [this]()
+                   { pWebServer->send(200, "text/plain", "Microsoft NCSI"); });
+
     // Android CaptivePortalCheck endpoint
-    pWebServer->on("/generate_204", [this]() {
-        pWebServer->send(204);  // 204 No Content
-    });
-    
+    pWebServer->on("/generate_204", [this]()
+                   {
+                       pWebServer->send(204); // 204 No Content
+                   });
+
     // Generic captive.apple.com detection
-    pWebServer->on("/captive.apple.com", [this]() {
+    pWebServer->on("/captive.apple.com", [this]()
+                   {
         pWebServer->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        pWebServer->send(200, "text/plain", "Success");
-    });
-    
+        pWebServer->send(200, "text/plain", "Success"); });
+
     // All other paths redirect to dashboard for captive portal
     // 404 handler
-    pWebServer->onNotFound([this]() {
+    pWebServer->onNotFound([this]()
+                           {
         // For captive portal, redirect to dashboard instead of 404
         String redirectURL = "http://";
         redirectURL += WiFi.softAPIP().toString();
@@ -693,11 +779,11 @@ void SensythingWiFi::setupWebServer() {
         
         pWebServer->sendHeader("Location", redirectURL);
         pWebServer->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        pWebServer->send(302, "text/plain", "");
-    });
+        pWebServer->send(302, "text/plain", ""); });
 }
 
-String SensythingWiFi::generateDashboardHTML() {
+String SensythingWiFi::generateDashboardHTML()
+{
     // Embedded HTML dashboard with real-time chart
     String html = R"rawliteral(
 <!DOCTYPE html>
@@ -1351,6 +1437,30 @@ String SensythingWiFi::generateDashboardHTML() {
                         <button class="btn btn-success btn-sm" onclick="sendCommand('enable_sd')">Enable</button>
                         <button class="btn btn-danger btn-sm" onclick="sendCommand('disable_sd')">Disable</button>
                     </div>
+                </div>
+                
+                <!-- MQTT Configuration -->
+                <div class="config-item">
+                    <div class="config-label">🔗 MQTT Broker</div>
+                    <input type="text" class="config-input" id="mqttBroker" placeholder="broker.example.com">
+                    <input type="number" class="config-input" id="mqttPort" placeholder="1883" value="1883" style="width: 100px;">
+                    <div class="config-buttons" style="margin-top: 6px;">
+                        <button class="btn btn-success btn-sm" onclick="initMQTT()">Connect</button>
+                        <span id="mqttStatus" style="font-size: 12px; margin-left: 10px;">●</span>
+                    </div>
+                </div>
+                
+                <div class="config-item">
+                    <div class="config-label">🔐 MQTT Auth</div>
+                    <input type="text" class="config-input" id="mqttUser" placeholder="username (optional)">
+                    <input type="password" class="config-input" id="mqttPass" placeholder="password (optional)">
+                    <button class="btn btn-info btn-sm" onclick="setMQTTAuth()" style="margin-top: 6px;">Set Credentials</button>
+                </div>
+                
+                <div class="config-item">
+                    <div class="config-label">📌 MQTT Topic</div>
+                    <input type="text" class="config-input" id="mqttTopic" placeholder="sensything" value="sensything">
+                    <button class="btn btn-info btn-sm" onclick="setMQTTTopic()" style="margin-top: 6px;">Set Topic</button>
                 </div>
                 
                 <!-- System Info -->
@@ -2034,6 +2144,51 @@ String SensythingWiFi::generateDashboardHTML() {
                 .catch(e => console.error('Command failed:', e));
         }
         
+        // ===== MQTT FUNCTIONS =====
+        function initMQTT() {
+            const broker = document.getElementById('mqttBroker').value;
+            const port = document.getElementById('mqttPort').value;
+            const status = document.getElementById('mqttStatus');
+            
+            if (!broker) {
+                status.innerHTML = '<span style="color: #f56565;">Enter broker address</span>';
+                return;
+            }
+            
+            status.innerHTML = '<span style="color: #667eea;">⏳</span>';
+            
+            // Send command via Serial command interface
+            sendCommand('init_mqtt ' + broker + ' ' + port);
+            
+            // Show success message
+            setTimeout(() => {
+                status.innerHTML = '<span style="color: #48bb78;">✓</span>';
+            }, 1000);
+        }
+        
+        function setMQTTAuth() {
+            const user = document.getElementById('mqttUser').value;
+            const pass = document.getElementById('mqttPass').value;
+            
+            if (user && pass) {
+                sendCommand('mqtt_auth ' + user + ' ' + pass);
+                alert('MQTT credentials set (requires re-init)');
+            } else {
+                alert('Enter both username and password');
+            }
+        }
+        
+        function setMQTTTopic() {
+            const topic = document.getElementById('mqttTopic').value;
+            
+            if (topic) {
+                sendCommand('mqtt_topic ' + topic);
+                alert('MQTT topic set');
+            } else {
+                alert('Enter a topic');
+            }
+        }
+        
         function autoScanNetworks() {
             // Auto-scan on page load - create a mock event for the button
             const mockEvent = {
@@ -2057,6 +2212,6 @@ String SensythingWiFi::generateDashboardHTML() {
 </body>
 </html>
 )rawliteral";
-    
+
     return html;
 }

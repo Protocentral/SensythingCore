@@ -103,10 +103,12 @@ typedef struct {
     bool bleStreamingEnabled;                    // BLE streaming
     bool wifiStreamingEnabled;                   // WiFi streaming
     bool sdLoggingEnabled;                       // SD card logging
+    bool mqttStreamingEnabled;                   // MQTT streaming
     
     // Connection status
     bool bleConnected;                           // BLE client connected
     bool wifiConnected;                          // WiFi connected (STA or AP)
+    bool mqttConnected;                          // MQTT broker connected
     bool sdCardReady;                            // SD card mounted and ready
     
     // Data management
@@ -132,6 +134,7 @@ typedef struct {
     uint8_t activeInterfaces;                    // Bitmask of active interfaces
     bool bleConnected;
     bool wifiConnected;
+    bool mqttConnected;
     bool sdCardReady;
     
     String currentSDFile;                        // Current log file name

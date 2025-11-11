@@ -27,6 +27,7 @@ class SensythingUSB;
 class SensythingBLE;
 class SensythingWiFi;
 class SensythingSDCard;
+class SensythingMQTT;
 
 class SensythingCore {
 public:
@@ -126,6 +127,15 @@ public:
      */
     bool initSDCard();
     
+    /**
+     * Initialize MQTT module
+     * @param brokerAddress MQTT broker IP/hostname
+     * @param brokerPort MQTT broker port (default 1883)
+     * @param clientID MQTT client ID (nullptr = auto-generate from board name)
+     * @return true if successful, false otherwise
+     */
+    bool initMQTT(const char* brokerAddress, uint16_t brokerPort = 1883, const char* clientID = nullptr);
+    
     // =================================================================================================
     // COMMUNICATION INTERFACE CONTROL
     // =================================================================================================
@@ -155,6 +165,32 @@ public:
      * @param enable true to enable, false to disable
      */
     void enableSDCard(bool enable);
+    
+    /**
+     * Enable/disable MQTT streaming
+     * @param enable true to enable, false to disable
+     */
+    void enableMQTT(bool enable);
+    
+    /**
+     * Set MQTT credentials (username/password)
+     * @param username MQTT username
+     * @param password MQTT password
+     * @return true if successful
+     */
+    bool setMQTTCredentials(const char* username, const char* password);
+    
+    /**
+     * Set MQTT base topic
+     * @param baseTopic Base topic (e.g., "sensything")
+     */
+    void setMQTTBaseTopic(const char* baseTopic);
+    
+    /**
+     * Set MQTT QoS level (0, 1, or 2)
+     * @param qos Quality of Service level
+     */
+    void setMQTTQoS(uint8_t qos);
     
     /**
      * Enable all communication interfaces
@@ -257,8 +293,10 @@ public:
     bool isBLEEnabled() { return sysState.bleStreamingEnabled; }
     bool isWiFiEnabled() { return sysState.wifiStreamingEnabled; }
     bool isSDEnabled() { return sysState.sdLoggingEnabled; }
+    bool isMQTTEnabled() { return sysState.mqttStreamingEnabled; }
     bool isBLEConnected() { return sysState.bleConnected; }
     bool isWiFiConnected() { return sysState.wifiConnected; }
+    bool isMQTTConnected() { return sysState.mqttConnected; }
     bool isSDReady() { return sysState.sdCardReady; }
     uint32_t getMeasurementCount() { return sysState.measurementCount; }
     
@@ -276,6 +314,7 @@ protected:
     SensythingBLE* bleModule;
     SensythingWiFi* wifiModule;
     SensythingSDCard* sdModule;
+    SensythingMQTT* mqttModule;
     
     // =================================================================================================
     // PROTECTED HELPER METHODS

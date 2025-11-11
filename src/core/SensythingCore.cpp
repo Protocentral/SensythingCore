@@ -12,6 +12,7 @@
 #include "../communication/SensythingBLE.h"
 #include "../communication/SensythingWiFi.h"
 #include "../communication/SensythingSDCard.h"
+#include "../communication/SensythingMQTT.h"
 
 // =================================================================================================
 // CONSTRUCTOR / DESTRUCTOR
@@ -23,6 +24,7 @@ SensythingCore::SensythingCore() {
     bleModule = nullptr;
     wifiModule = nullptr;
     sdModule = nullptr;
+    mqttModule = nullptr;
     
     // Initialize system state
     initSystemState();
@@ -34,6 +36,7 @@ SensythingCore::~SensythingCore() {
     if (bleModule) delete bleModule;
     if (wifiModule) delete wifiModule;
     if (sdModule) delete sdModule;
+    if (mqttModule) delete mqttModule;
 }
 
 // =================================================================================================
@@ -225,6 +228,35 @@ bool SensythingCore::initSDCard() {
     return true;
 }
 
+bool SensythingCore::initMQTT(const char* brokerAddress, uint16_t brokerPort, const char* clientID) {
+    if (mqttModule) {
+        Serial.println(String(EMOJI_WARNING) + " MQTT already initialized");
+        return true;
+    }
+    
+    // Check WiFi connectivity (MQTT requires WiFi)
+    if (!wifiModule || WiFi.status() != WL_CONNECTED) {
+        Serial.println(String(EMOJI_ERROR) + " WiFi must be connected before MQTT. Call initWiFi() first.");
+        return false;
+    }
+    
+    mqttModule = new SensythingMQTT();
+    
+    // Generate client ID if not provided
+    String finalClientID = clientID ? clientID : (getBoardName() + "_" + String(ESP.getEfuseMac(), HEX));
+    
+    if (!mqttModule->init(brokerAddress, brokerPort, finalClientID.c_str(), boardConfig)) {
+        Serial.println(String(EMOJI_ERROR) + " MQTT initialization failed");
+        delete mqttModule;
+        mqttModule = nullptr;
+        return false;
+    }
+    
+    sysState.mqttConnected = false;  // Will be set by streaming
+    Serial.println(String(EMOJI_NETWORK) + " MQTT module ready");
+    return true;
+}
+
 // =================================================================================================
 // COMMUNICATION INTERFACE CONTROL
 // =================================================================================================
@@ -286,11 +318,54 @@ void SensythingCore::enableSDCard(bool enable) {
     }
 }
 
+void SensythingCore::enableMQTT(bool enable) {
+    if (enable && !mqttModule) {
+        Serial.println(String(EMOJI_WARNING) + " MQTT not initialized. Call initMQTT() first.");
+        return;
+    }
+    
+    sysState.mqttStreamingEnabled = enable;
+    
+    if (enable) {
+        Serial.println(String(EMOJI_NETWORK) + " MQTT streaming enabled");
+    } else {
+        Serial.println(String(EMOJI_NETWORK) + " MQTT streaming disabled");
+    }
+}
+
+bool SensythingCore::setMQTTCredentials(const char* username, const char* password) {
+    if (!mqttModule) {
+        Serial.println(String(EMOJI_WARNING) + " MQTT not initialized. Call initMQTT() first.");
+        return false;
+    }
+    
+    return mqttModule->setCredentials(username, password);
+}
+
+void SensythingCore::setMQTTBaseTopic(const char* baseTopic) {
+    if (!mqttModule) {
+        Serial.println(String(EMOJI_WARNING) + " MQTT not initialized. Call initMQTT() first.");
+        return;
+    }
+    
+    mqttModule->setBaseTopic(baseTopic);
+}
+
+void SensythingCore::setMQTTQoS(uint8_t qos) {
+    if (!mqttModule) {
+        Serial.println(String(EMOJI_WARNING) + " MQTT not initialized. Call initMQTT() first.");
+        return;
+    }
+    
+    mqttModule->setQoS(qos);
+}
+
 void SensythingCore::enableAll() {
     enableUSB(true);
     enableBLE(true);
     enableWiFi(true);
     enableSDCard(true);
+    enableMQTT(true);
 }
 
 void SensythingCore::disableAll() {
@@ -298,6 +373,7 @@ void SensythingCore::disableAll() {
     enableBLE(false);
     enableWiFi(false);
     enableSDCard(false);
+    enableMQTT(false);
 }
 
 // =================================================================================================
@@ -386,6 +462,14 @@ void SensythingCore::streamMeasurement() {
             sdModule->rotateFile();
             sysState.lastFileRotation = now;
         }
+    }
+    
+    // Stream to MQTT if enabled
+    if (sysState.mqttStreamingEnabled && mqttModule) {
+        mqttModule->streamData(currentMeasurement, boardConfig);
+        mqttModule->update();  // Handle reconnection and message processing
+        // Update connection state
+        sysState.mqttConnected = mqttModule->isConnected();
     }
 }
 
@@ -489,6 +573,60 @@ void SensythingCore::processCommand(String command) {
             Serial.println(String(EMOJI_ERROR) + " WiFi module not initialized");
         }
         
+    } else if (command.startsWith("init_mqtt")) {
+        // Format: init_mqtt <broker> <port>
+        int firstSpace = command.indexOf(' ');
+        int secondSpace = command.indexOf(' ', firstSpace + 1);
+        
+        if (firstSpace > 0 && secondSpace > firstSpace) {
+            String broker = command.substring(firstSpace + 1, secondSpace);
+            String portStr = command.substring(secondSpace + 1);
+            uint16_t port = portStr.toInt();
+            
+            if (port == 0) port = 1883;  // Default MQTT port
+            
+            Serial.println(String(EMOJI_INFO) + " Initializing MQTT: " + broker + ":" + String(port));
+            bool success = initMQTT(broker.c_str(), port);
+            
+            if (success) {
+                enableMQTT(true);
+                Serial.println(String(EMOJI_SUCCESS) + " MQTT initialized and enabled!");
+            } else {
+                Serial.println(String(EMOJI_ERROR) + " MQTT initialization failed");
+            }
+        } else {
+            Serial.println(String(EMOJI_ERROR) + " Usage: init_mqtt <broker> <port>");
+        }
+        
+    } else if (command.startsWith("mqtt_auth")) {
+        // Format: mqtt_auth <username> <password>
+        int firstSpace = command.indexOf(' ');
+        int secondSpace = command.indexOf(' ', firstSpace + 1);
+        
+        if (firstSpace > 0 && secondSpace > firstSpace) {
+            String user = command.substring(firstSpace + 1, secondSpace);
+            String pass = command.substring(secondSpace + 1);
+            
+            bool success = setMQTTCredentials(user.c_str(), pass.c_str());
+            if (success) {
+                Serial.println(String(EMOJI_SUCCESS) + " MQTT credentials set!");
+            }
+        } else {
+            Serial.println(String(EMOJI_ERROR) + " Usage: mqtt_auth <username> <password>");
+        }
+        
+    } else if (command.startsWith("mqtt_topic")) {
+        // Format: mqtt_topic <topic>
+        int spaceIndex = command.indexOf(' ');
+        
+        if (spaceIndex > 0) {
+            String topic = command.substring(spaceIndex + 1);
+            setMQTTBaseTopic(topic.c_str());
+            Serial.println(String(EMOJI_SUCCESS) + " MQTT topic set to: " + topic);
+        } else {
+            Serial.println(String(EMOJI_ERROR) + " Usage: mqtt_topic <topic>");
+        }
+        
     } else {
         Serial.printf("%s Unknown command: '%s' (type 'help' for commands)\n", 
                      EMOJI_ERROR, command.c_str());
@@ -507,6 +645,9 @@ void SensythingCore::printHelp() {
     Serial.println("rotate_file     - Force new SD file");
     Serial.println("set_rate <ms>   - Set sample rate (20-10000)");
     Serial.println("forget_wifi     - Clear saved WiFi credentials");
+    Serial.println("init_mqtt <br> <port> - Initialize MQTT");
+    Serial.println("mqtt_auth <user> <pass> - Set MQTT credentials");
+    Serial.println("mqtt_topic <topic> - Set MQTT base topic");
     Serial.println("help            - Show this help");
     Serial.println("=================================");
 }
