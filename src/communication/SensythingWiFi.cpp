@@ -9,6 +9,7 @@
 //////////////////////////////////////////////////////////////////////////////////////////
 
 #include "SensythingWiFi.h"
+#include "../core/SensythingCore.h"
 
 // Static instance for callback
 SensythingWiFi* SensythingWiFi::instance = nullptr;
@@ -513,7 +514,9 @@ void SensythingWiFi::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload
             Serial.print(num);
             Serial.print(": ");
             Serial.println((char*)payload);
-            // TODO: Implement command handling (start/stop, set rate, etc.)
+            if (commandHandler) {
+                commandHandler->processCommand(String((char*)payload));
+            }
             break;
             
         case WStype_ERROR:
@@ -635,9 +638,11 @@ void SensythingWiFi::setupWebServer() {
         
         String cmd = pWebServer->arg("cmd");
         Serial.println(String(EMOJI_INFO) + " Command via API: " + cmd);
-        
-        // Commands will be handled by the main application
-        // For now, just acknowledge receipt
+
+        // Route command to core for processing
+        if (commandHandler) {
+            commandHandler->processCommand(cmd);
+        }
         pWebServer->send(200, "application/json", "{\"success\":true,\"cmd\":\"" + cmd + "\"}");
     });
     

@@ -154,6 +154,7 @@ bool SensythingCore::initWiFi(const char* ssid, const char* password) {
     String apPassword = password ? String(password) : "";
     
     wifiModule = new SensythingWiFi();
+    wifiModule->setCommandHandler(this);
     if (!wifiModule->initAP(apSSID, apPassword, boardConfig)) {
         Serial.println(String(EMOJI_ERROR) + " WiFi AP initialization failed");
         delete wifiModule;
@@ -177,6 +178,7 @@ bool SensythingCore::initWiFiStation(const char* ssid, const char* password) {
     }
     
     wifiModule = new SensythingWiFi();
+    wifiModule->setCommandHandler(this);
     if (!wifiModule->initStation(String(ssid), String(password), boardConfig)) {
         Serial.println(String(EMOJI_ERROR) + " WiFi Station initialization failed");
         delete wifiModule;
@@ -195,6 +197,7 @@ bool SensythingCore::initAPStation(const char* apSSID, const char* apPassword, c
     }
     
     wifiModule = new SensythingWiFi();
+    wifiModule->setCommandHandler(this);
     if (!wifiModule->initAPStation(String(apSSID), String(apPassword), String(staSSID), String(staPassword), boardConfig)) {
         Serial.println(String(EMOJI_ERROR) + " WiFi AP+Station initialization failed");
         delete wifiModule;
@@ -273,12 +276,15 @@ void SensythingCore::enableWiFi(bool enable, const char* ssid, const char* passw
 
 void SensythingCore::enableSDCard(bool enable) {
     if (enable && !sdModule) {
-        Serial.println(String(EMOJI_WARNING) + " SD Card not initialized. Call initSDCard() first.");
-        return;
+        Serial.println(String(EMOJI_INFO) + " Auto-initializing SD Card...");
+        if (!initSDCard()) {
+            Serial.println(String(EMOJI_ERROR) + " SD Card initialization failed. Check card insertion.");
+            return;
+        }
     }
-    
+
     sysState.sdLoggingEnabled = enable;
-    
+
     if (enable) {
         Serial.println(String(EMOJI_STORAGE) + " SD Card logging enabled");
     } else {
@@ -457,6 +463,12 @@ void SensythingCore::processCommand(String command) {
         
     } else if (command == CMD_TOGGLE_SD) {
         enableSDCard(!sysState.sdLoggingEnabled);
+
+    } else if (command == "enable_sd") {
+        enableSDCard(true);
+
+    } else if (command == "disable_sd") {
+        enableSDCard(false);
         
     } else if (command == CMD_ROTATE_FILE) {
         if (sdModule && sysState.sdLoggingEnabled) {

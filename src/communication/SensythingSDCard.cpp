@@ -34,11 +34,14 @@ bool SensythingSDCard::init() {
         return true;
     }
     
-    Serial.print(String(EMOJI_STORAGE) + " Initializing SD Card (SDIO)... ");
-    
-    // Initialize SD_MMC with 1-bit mode (uses only D0 line for better compatibility)
-    // 4-bit mode can be enabled by passing true as second parameter
-    if (!SD_MMC.begin("/sdcard", true)) {  // true = 1-bit mode
+    Serial.print(String(EMOJI_STORAGE) + " Initializing SD Card (SDIO 4-bit)... ");
+
+    // Configure all SDIO pins to match board hardware
+    SD_MMC.setPins(SENSYTHING_SDIO_CLK, SENSYTHING_SDIO_CMD, SENSYTHING_SDIO_D0,
+                   SENSYTHING_SDIO_D1, SENSYTHING_SDIO_D2, SENSYTHING_SDIO_D3);
+
+    // Initialize SD_MMC in 4-bit mode for full bandwidth
+    if (!SD_MMC.begin("/sdcard", false)) {  // false = 4-bit mode
         Serial.println(String(EMOJI_ERROR) + " Failed");
         Serial.println(String(EMOJI_INFO) + " Check SD card insertion and SDIO connections");
         return false;

@@ -142,18 +142,8 @@
 #define SENSYTHING_JSON_PRECISION 4  // Decimal places for float values
 
 // =================================================================================================
-// STATUS FLAGS
+// STATUS FLAGS — Canonical definitions are in SensythingTypes.h
 // =================================================================================================
-
-// Status flag bits (used in status_flags field)
-#define SENSYTHING_STATUS_CH0_FAIL   0x01
-#define SENSYTHING_STATUS_CH1_FAIL   0x02
-#define SENSYTHING_STATUS_CH2_FAIL   0x04
-#define SENSYTHING_STATUS_CH3_FAIL   0x08
-#define SENSYTHING_STATUS_SENSOR_ERR 0x10
-#define SENSYTHING_STATUS_OVERFLOW   0x20
-#define SENSYTHING_STATUS_CAPDAC_ADJ 0x40
-#define SENSYTHING_STATUS_RESERVED   0x80
 
 // =================================================================================================
 // EMOJI PREFIXES (for user-friendly serial output)

@@ -170,7 +170,7 @@ void setup() {
     sensything.enableUSB(false);
     sensything.enableWiFi(true);
     Serial.println("✓ Auto-started WiFi streaming (USB streaming disabled for debug)");
-    Serial.println("ℹ️  Use 'stop_wifi' command to pause streaming");
+    Serial.println("ℹ️  Use 'stop_all' command to pause streaming");
     Serial.println();
 }
 

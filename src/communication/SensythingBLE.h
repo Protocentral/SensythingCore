@@ -97,11 +97,6 @@ private:
      */
     int formatAsInt16Array(uint8_t* buffer, const MeasurementData& data, const BoardConfig& config);
     
-    /**
-     * Create BLE server and service
-     * @return true if successful
-     */
-    bool setupBLEServer();
 };
 
 #endif // SENSYTHING_BLE_H

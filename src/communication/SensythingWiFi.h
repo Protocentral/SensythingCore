@@ -28,6 +28,9 @@ typedef enum {
     SENSYTHING_WIFI_MODE_APSTA    // Both AP and STA
 } SensythingWiFiMode;
 
+// Forward declaration for command callback
+class SensythingCore;
+
 class SensythingWiFi {
 public:
     SensythingWiFi();
@@ -141,8 +144,15 @@ public:
      * @return Number of WebSocket clients
      */
     uint8_t getClientCount() const { return clientCount; }
-    
+
+    /**
+     * Set the command handler (core instance) for routing API/WebSocket commands
+     * @param core Pointer to SensythingCore instance
+     */
+    void setCommandHandler(SensythingCore* core) { commandHandler = core; }
+
 private:
+    SensythingCore* commandHandler = nullptr;
     WebServer* pWebServer;
     WebSocketsServer* pWebSocket;
     SensythingWiFiMode wifiMode;
