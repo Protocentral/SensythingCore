@@ -100,7 +100,7 @@ COMPILE_ARGS=(
     compile
     -b "$BOARD_FQBN"
     --board-options "$BOARD_OPTIONS"
-    --library "$PROJECT_ROOT"
+    --build-path "$PROJECT_ROOT/.build/ox_wifi"
 )
 
 if [ "$VERBOSE" = true ]; then
@@ -131,6 +131,7 @@ UPLOAD_ARGS=(
     upload
     -b "$BOARD_FQBN"
     --board-options "$BOARD_OPTIONS"
+    --input-dir "$PROJECT_ROOT/.build/ox_wifi"
 )
 
 if [ -n "$PORT" ]; then
