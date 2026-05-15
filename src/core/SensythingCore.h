@@ -135,6 +135,14 @@ public:
      * @param enable true to enable, false to disable
      */
     void enableUSB(bool enable);
+
+    /**
+     * Set the USB streaming format (CSV text or OpenView2 binary packet).
+     * In OpenView mode the serial line carries framed binary packets compatible
+     * with Protocentral OpenView2; avoid mixing other Serial.print() output once
+     * a host has started parsing.
+     */
+    void setUSBFormat(SensythingUSBFormat fmt);
     
     /**
      * Enable/disable BLE streaming

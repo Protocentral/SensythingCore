@@ -245,6 +245,13 @@ void SensythingCore::enableUSB(bool enable) {
     }
 }
 
+void SensythingCore::setUSBFormat(SensythingUSBFormat fmt) {
+    if (!usbModule) {
+        usbModule = new SensythingUSB();
+    }
+    usbModule->setFormat(fmt);
+}
+
 void SensythingCore::enableBLE(bool enable) {
     if (enable && !bleModule) {
         Serial.println(String(EMOJI_WARNING) + " BLE not initialized. Call initBLE() first.");

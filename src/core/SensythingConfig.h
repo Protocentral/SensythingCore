@@ -137,6 +137,13 @@
 #define SENSYTHING_USB_USE_EMOJIS true
 #define SENSYTHING_USB_TIMESTAMP true
 
+// OpenView2 packet framing (https://github.com/Protocentral/protocentral_openview2)
+// Standard packet: 0x0A 0xFA | len LSB | len MSB | type | payload | 0x0B
+#define SENSYTHING_OPENVIEW_PKT_START_1 0x0A
+#define SENSYTHING_OPENVIEW_PKT_START_2 0xFA
+#define SENSYTHING_OPENVIEW_PKT_STOP    0x0B
+#define SENSYTHING_OPENVIEW_PKT_TYPE_DATA 0x02
+
 // JSON configuration
 #define SENSYTHING_JSON_BUFFER_SIZE 512
 #define SENSYTHING_JSON_PRECISION 4  // Decimal places for float values

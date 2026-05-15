@@ -54,12 +54,14 @@ jobs:
           sketch-paths: |
             - examples/01.SensythingCAP/01.Basic/Cap_USB_Streaming
             - examples/01.SensythingCAP/02.Communication/Cap_BLE_Streaming
+            - examples/01.SensythingCAP/02.Communication/Cap_OpenView_USB
             - examples/01.SensythingCAP/03.DataLogging/Cap_SD_Logger
             - examples/01.SensythingCAP/04.WiFi/Cap_WiFi_Station
             - examples/01.SensythingCAP/04.WiFi/Cap_WiFi_Dashboard
             - examples/01.SensythingCAP/04.WiFi/Cap_WiFi_Config_Portal
             - examples/02.SensythingOX/01.Basic/OX_USB_Streaming
             - examples/02.SensythingOX/02.Communication/OX_BLE_Streaming
+            - examples/02.SensythingOX/02.Communication/OX_OpenView_USB
             - examples/02.SensythingOX/03.DataLogging/OX_SD_Logger
             - examples/02.SensythingOX/04.WiFi/OX_WiFi_Dashboard
           verbose: false

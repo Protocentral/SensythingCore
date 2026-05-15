@@ -71,6 +71,15 @@ enum SensythingInterface {
 #define SENSYTHING_STATUS_INVALID_DATA    0x80   // Invalid SpO2/HR calculation
 
 // =================================================================================================
+// USB STREAMING FORMATS
+// =================================================================================================
+
+enum SensythingUSBFormat {
+    USB_FORMAT_CSV      = 0,   // Human-readable CSV (default)
+    USB_FORMAT_OPENVIEW = 1    // Binary OpenView2 packet (int16 LE per channel)
+};
+
+// =================================================================================================
 // MEASUREMENT DATA STRUCTURE
 // =================================================================================================
 

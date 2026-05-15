@@ -1,0 +1,176 @@
+#!/bin/bash
+
+################################################################################
+#
+#  SensythingCore - Compile & Upload Cap OpenView USB
+#
+#  Compiles and uploads the Cap_OpenView_USB example to a connected
+#  Sensything Cap (ESP32-S3) board. The sketch streams 4-channel
+#  capacitance data over USB Serial as binary OpenView2 packets.
+#
+#  Prerequisites:
+#    - arduino-cli installed and in PATH
+#    - ESP32 board package installed
+#    - Required libraries: ProtoCentral FDC1004
+#    - Sensything Cap connected via USB
+#
+#  Usage:
+#    ./upload-cap-openview-usb.sh [--port PORT] [--compile-only] [--verbose]
+#
+#  Options:
+#    --port PORT        Serial port (default: auto-detect)
+#    --compile-only     Compile without uploading
+#    --verbose          Show full compiler output
+#
+################################################################################
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Configuration
+BOARD_FQBN="esp32:esp32:esp32s3"
+BOARD_OPTIONS="PSRAM=enabled,CDCOnBoot=cdc,USBMode=hwcdc"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+SKETCH_DIR="$PROJECT_ROOT/examples/01.SensythingCAP/02.Communication/Cap_OpenView_USB"
+PORT=""
+COMPILE_ONLY=false
+VERBOSE=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --port)
+            PORT="$2"
+            shift 2
+            ;;
+        --compile-only)
+            COMPILE_ONLY=true
+            shift
+            ;;
+        --verbose)
+            VERBOSE=true
+            shift
+            ;;
+        --help)
+            head -n 30 "$0" | tail -n 25
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            exit 1
+            ;;
+    esac
+done
+
+print_step() {
+    echo -e "${BLUE}=> $1${NC}"
+}
+
+# Check prerequisites
+if ! command -v arduino-cli &> /dev/null; then
+    echo -e "${RED}Error: arduino-cli not found. Install from https://arduino.cc/en/software${NC}"
+    exit 2
+fi
+
+if [ ! -f "$SKETCH_DIR/Cap_OpenView_USB.ino" ]; then
+    echo -e "${RED}Error: Sketch not found at $SKETCH_DIR/Cap_OpenView_USB.ino${NC}"
+    exit 2
+fi
+
+echo ""
+echo -e "${BLUE}===============================================================${NC}"
+echo -e "${BLUE}  Sensything Cap - OpenView USB Compile & Upload${NC}"
+echo -e "${BLUE}===============================================================${NC}"
+echo ""
+
+# Auto-detect port if not provided
+if [ -z "$PORT" ]; then
+    DETECTED_PORT=$(arduino-cli board list 2>/dev/null \
+        | awk '/esp32_family|esp32s3/ {print $1; exit}')
+    if [ -n "$DETECTED_PORT" ]; then
+        PORT="$DETECTED_PORT"
+        echo -e "${YELLOW}Auto-detected port: $PORT${NC}"
+        echo ""
+    fi
+fi
+
+# Compile
+print_step "Compiling Cap_OpenView_USB..."
+echo "  Board:   $BOARD_FQBN"
+echo "  Options: $BOARD_OPTIONS"
+echo ""
+
+COMPILE_ARGS=(
+    compile
+    -b "$BOARD_FQBN"
+    --board-options "$BOARD_OPTIONS"
+    --library "$PROJECT_ROOT"
+)
+
+if [ "$VERBOSE" = true ]; then
+    COMPILE_ARGS+=(-v)
+fi
+
+COMPILE_ARGS+=("$SKETCH_DIR")
+
+if arduino-cli "${COMPILE_ARGS[@]}"; then
+    echo ""
+    echo -e "${GREEN}Compilation successful${NC}"
+else
+    echo ""
+    echo -e "${RED}Compilation failed${NC}"
+    exit 1
+fi
+
+# Upload
+if [ "$COMPILE_ONLY" = true ]; then
+    echo -e "${YELLOW}Skipping upload (--compile-only)${NC}"
+    exit 0
+fi
+
+echo ""
+print_step "Uploading to board..."
+
+UPLOAD_ARGS=(
+    upload
+    -b "$BOARD_FQBN"
+    --board-options "$BOARD_OPTIONS"
+)
+
+if [ -n "$PORT" ]; then
+    UPLOAD_ARGS+=(-p "$PORT")
+    echo "  Port: $PORT"
+else
+    echo "  Port: auto-detect"
+fi
+
+if [ "$VERBOSE" = true ]; then
+    UPLOAD_ARGS+=(-v)
+fi
+
+UPLOAD_ARGS+=("$SKETCH_DIR")
+
+if arduino-cli "${UPLOAD_ARGS[@]}"; then
+    echo ""
+    echo -e "${GREEN}Upload successful${NC}"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Open Protocentral OpenView2 and select port: ${PORT:-<your serial port>}"
+    echo "  2. Set baud rate to 115200"
+    echo "  3. Packets stream as: 0x0A 0xFA | len_LSB len_MSB | 0x02 | 4 x int16 LE | 0x0B"
+    echo ""
+else
+    echo ""
+    echo -e "${RED}Upload failed${NC}"
+    echo "  - Check that the board is connected via USB"
+    echo "  - Try specifying the port: $0 --port /dev/cu.usbmodemXXX"
+    echo "  - Hold BOOT button during upload if needed"
+    exit 1
+fi

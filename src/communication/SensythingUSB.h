@@ -2,7 +2,8 @@
 //    (c) 2025 Protocentral Electronics
 //
 //    SensythingES3 - USB Serial Communication Module
-//    Handles USB Serial streaming with CSV format and emoji prefixes
+//    Streams measurements over USB Serial as CSV text or as a binary
+//    OpenView2 packet (https://github.com/Protocentral/protocentral_openview2)
 //
 //    This software is licensed under the MIT License(http://opensource.org/licenses/MIT).
 //
@@ -18,48 +19,50 @@
 class SensythingUSB {
 public:
     SensythingUSB();
-    
+
     /**
      * Stream measurement data to USB Serial
      * @param data Measurement data to stream
      * @param config Board configuration for formatting
      */
     void streamData(const MeasurementData& data, const BoardConfig& config);
-    
+
     /**
-     * Set whether to use emoji prefixes
-     * @param enable true to enable emojis, false to disable
+     * Select the wire format used by streamData().
+     * USB_FORMAT_CSV      : human-readable CSV (default)
+     * USB_FORMAT_OPENVIEW : binary OpenView2 packet
+     */
+    void setFormat(SensythingUSBFormat fmt);
+    SensythingUSBFormat getFormat() const { return format; }
+
+    /**
+     * Set whether to use emoji prefixes (CSV format only)
      */
     void setUseEmojis(bool enable);
-    
+
     /**
-     * Set whether to include timestamps
-     * @param enable true to include timestamps, false to disable
+     * Set whether to include timestamps (CSV format only)
      */
     void setUseTimestamp(bool enable);
-    
+
     /**
      * Set CSV separator character
-     * @param separator Character to use (default: ',')
      */
     void setSeparator(char separator);
-    
+
 private:
+    SensythingUSBFormat format;
     bool useEmojis;
     bool useTimestamp;
     char csvSeparator;
-    
-    /**
-     * Format and print CSV header (called once at start)
-     */
-    void printCSVHeader(const BoardConfig& config);
-    
-    /**
-     * Format a single measurement as CSV
-     */
-    String formatAsCSV(const MeasurementData& data, const BoardConfig& config);
-    
     bool headerPrinted;
+
+    void printCSVHeader(const BoardConfig& config);
+    String formatAsCSV(const MeasurementData& data, const BoardConfig& config);
+
+    // OpenView2 packet: 0x0A 0xFA | len LSB | len MSB | 0x02 | payload | 0x0B
+    // Payload is channelCount * int16 little-endian (matches BLE OpenView mapping).
+    void streamOpenViewPacket(const MeasurementData& data, const BoardConfig& config);
 };
 
 #endif // SENSYTHING_USB_H
