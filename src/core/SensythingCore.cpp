@@ -318,12 +318,21 @@ void SensythingCore::disableAll() {
 // =================================================================================================
 
 bool SensythingCore::setSampleRate(unsigned long intervalMs) {
-    if (intervalMs < SENSYTHING_MIN_SAMPLE_INTERVAL_MS || 
-        intervalMs > SENSYTHING_MAX_SAMPLE_INTERVAL_MS) {
-        Serial.printf("%s Invalid sample rate (valid range: %lu-%lu ms)\n", 
+    // Validate against this board's own limits when it has populated them,
+    // otherwise fall back to the library-wide defaults. This lets boards like
+    // the OX (125Hz / 8ms native) run faster than the global 20ms floor.
+    unsigned long minInterval = boardConfig.minSampleInterval > 0
+                                    ? boardConfig.minSampleInterval
+                                    : SENSYTHING_MIN_SAMPLE_INTERVAL_MS;
+    unsigned long maxInterval = boardConfig.maxSampleInterval > 0
+                                    ? boardConfig.maxSampleInterval
+                                    : SENSYTHING_MAX_SAMPLE_INTERVAL_MS;
+
+    if (intervalMs < minInterval || intervalMs > maxInterval) {
+        Serial.printf("%s Invalid sample rate (valid range: %lu-%lu ms)\n",
                      EMOJI_ERROR,
-                     SENSYTHING_MIN_SAMPLE_INTERVAL_MS,
-                     SENSYTHING_MAX_SAMPLE_INTERVAL_MS);
+                     minInterval,
+                     maxInterval);
         return false;
     }
     

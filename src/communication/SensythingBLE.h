@@ -83,7 +83,17 @@ private:
     BLEService* pService;
     BLECharacteristic* pDataCharacteristic;
     BLEConnectionCallbacks* pCallbacks;
-    
+
+    // Standard SIG health-service characteristics (OX board only):
+    // Heart Rate Measurement (0x2A37) and PLX Spot-Check (0x2A5E)
+    BLEService* pHeartRateService;
+    BLEService* pSpo2Service;
+    BLECharacteristic* pHeartRateChar;
+    BLECharacteristic* pSpo2Char;
+    bool vitalsEnabled;          // true when board exposes SpO2/HR (OX)
+    int lastHeartRate;           // last notified bpm (-1 = none yet)
+    int lastSpo2;                // last notified SpO2 % (-1 = none yet)
+
     String deviceName;
     bool connected;
     bool initialized;
@@ -96,7 +106,15 @@ private:
      * @return Buffer size in bytes (channelCount × 2)
      */
     int formatAsInt16Array(uint8_t* buffer, const MeasurementData& data, const BoardConfig& config);
-    
+
+    /**
+     * Notify SpO2/HR on their standard SIG characteristics, only when the
+     * value changes (these metrics update ~1Hz, not at the sample rate).
+     * @param data Measurement data
+     * @param config Board configuration
+     */
+    void updateVitalsCharacteristics(const MeasurementData& data, const BoardConfig& config);
+
 };
 
 #endif // SENSYTHING_BLE_H

@@ -15,6 +15,13 @@ SensythingBLE::SensythingBLE() {
     pService = nullptr;
     pDataCharacteristic = nullptr;
     pCallbacks = nullptr;
+    pHeartRateService = nullptr;
+    pSpo2Service = nullptr;
+    pHeartRateChar = nullptr;
+    pSpo2Char = nullptr;
+    vitalsEnabled = false;
+    lastHeartRate = -1;
+    lastSpo2 = -1;
     connected = false;
     initialized = false;
     deviceName = "Sensything";
@@ -78,7 +85,31 @@ bool SensythingBLE::init(String deviceName) {
     
     // Start the service
     pService->start();
-    
+
+    // Create standard SIG health services for boards that report vitals (OX).
+    // Heart Rate Service (0x180D) → Heart Rate Measurement (0x2A37)
+    // Pulse Oximeter Service (0x1822) → PLX Spot-Check Measurement (0x2A5E)
+    // These notify at ~1Hz (only on change), independent of the raw sample stream.
+    if (vitalsEnabled) {
+        pHeartRateService = pServer->createService(
+            BLEUUID((uint16_t)SENSYTHING_BLE_HEARTRATE_SERVICE_UUID));
+        pHeartRateChar = pHeartRateService->createCharacteristic(
+            BLEUUID((uint16_t)SENSYTHING_BLE_HEARTRATE_CHAR_UUID),
+            BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+        pHeartRateChar->addDescriptor(new BLE2902());
+        pHeartRateService->start();
+
+        pSpo2Service = pServer->createService(
+            BLEUUID((uint16_t)SENSYTHING_BLE_SPO2_SERVICE_UUID));
+        pSpo2Char = pSpo2Service->createCharacteristic(
+            BLEUUID((uint16_t)SENSYTHING_BLE_SPO2_CHAR_UUID),
+            BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+        pSpo2Char->addDescriptor(new BLE2902());
+        pSpo2Service->start();
+
+        Serial.println(String(EMOJI_SUCCESS) + " HR (0x180D) and SpO2 (0x1822) services started");
+    }
+
     // Start advertising
     BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SENSYTHING_BLE_SERVICE_UUID);
@@ -101,6 +132,7 @@ bool SensythingBLE::init(const BoardConfig& config) {
         name = "Sensything-Cap";
     } else if (config.boardType == BOARD_TYPE_OX) {
         name = "Sensything-OX";
+        vitalsEnabled = true;  // expose standard HR + SpO2 services
     }
     return init(name);
 }
@@ -121,6 +153,57 @@ void SensythingBLE::streamData(const MeasurementData& data, const BoardConfig& c
     // Send notification
     pDataCharacteristic->setValue(buffer, bufferSize);
     pDataCharacteristic->notify();
+
+    // Push SpO2/HR on their dedicated SIG characteristics (only on change)
+    if (vitalsEnabled) {
+        updateVitalsCharacteristics(data, config);
+    }
+}
+
+// IEEE-11073-20601 16-bit SFLOAT: 4-bit signed exponent (0 here) + 12-bit
+// signed mantissa. For small integers this is just the value in the low 12 bits.
+static uint16_t sfloatFromInt(int value) {
+    if (value > 2047)  value = 2047;     // 12-bit signed range
+    if (value < -2048) value = -2048;
+    return (uint16_t)(value & 0x0FFF);
+}
+
+void SensythingBLE::updateVitalsCharacteristics(const MeasurementData& data, const BoardConfig& config) {
+    if (!pHeartRateChar || !pSpo2Char) {
+        return;
+    }
+
+    // OX layout: channel 2 = SpO2 (%), channel 3 = heart rate (bpm)
+    int hr = (int)data.channels[3];
+    int spo2 = (int)data.channels[2];
+    bool signalOk = !(data.status_flags & SENSYTHING_STATUS_NO_SIGNAL);
+
+    // Heart Rate Measurement (0x2A37): flags(uint8) + HR(uint8)
+    // flags = 0x00 → HR value format is uint8, no extra fields present.
+    if (signalOk && hr > 0 && hr <= 255 && hr != lastHeartRate) {
+        uint8_t hrm[2];
+        hrm[0] = 0x00;
+        hrm[1] = (uint8_t)hr;
+        pHeartRateChar->setValue(hrm, sizeof(hrm));
+        pHeartRateChar->notify();
+        lastHeartRate = hr;
+    }
+
+    // PLX Spot-Check Measurement (0x2A5E): flags(uint8) + SpO2(SFLOAT) + PR(SFLOAT)
+    // flags = 0x00 → no optional fields. SpO2 and pulse rate as SFLOATs (LE).
+    if (signalOk && spo2 > 0 && spo2 <= 100 && spo2 != lastSpo2) {
+        uint16_t spo2Sfloat = sfloatFromInt(spo2);
+        uint16_t prSfloat = sfloatFromInt(hr > 0 ? hr : 0);
+        uint8_t plx[5];
+        plx[0] = 0x00;
+        plx[1] = spo2Sfloat & 0xFF;
+        plx[2] = (spo2Sfloat >> 8) & 0xFF;
+        plx[3] = prSfloat & 0xFF;
+        plx[4] = (prSfloat >> 8) & 0xFF;
+        pSpo2Char->setValue(plx, sizeof(plx));
+        pSpo2Char->notify();
+        lastSpo2 = spo2;
+    }
 }
 
 int SensythingBLE::formatAsInt16Array(uint8_t* buffer, const MeasurementData& data, const BoardConfig& config) {
@@ -136,10 +219,21 @@ int SensythingBLE::formatAsInt16Array(uint8_t* buffer, const MeasurementData& da
             // Channel failed - send zero
             value = 0;
         } else {
-            // Convert float to int16
-            // For capacitance (pF), direct conversion (range ~-100 to 100 pF)
-            // For PPG, may need scaling in OX board implementation
-            value = (int16_t)(data.channels[i]);
+            // Convert float to int16.
+            // Channels whose full-scale range exceeds the int16 range (e.g. the
+            // OX 19-bit raw PPG channels, 0..524288) are right-shifted down to
+            // fit without wrapping; the shift is derived from the channel's
+            // declared maxValue so it is self-describing. Small-range channels
+            // (capacitance in pF, SpO2 %, heart rate bpm) pass through unchanged.
+            float maxVal = config.channels[i].maxValue;
+            if (maxVal > 32767.0f) {
+                int shift = 0;
+                float m = maxVal;
+                while (m > 32767.0f) { m /= 2.0f; shift++; }
+                value = (int16_t)((long)(data.channels[i]) >> shift);
+            } else {
+                value = (int16_t)(data.channels[i]);
+            }
         }
         
         // Send as little-endian (LSB first)
