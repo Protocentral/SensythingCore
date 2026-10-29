@@ -36,10 +36,13 @@ public:
     const StatusBitDesc* statusBits() const override;
     unsigned long minSampleIntervalMs() const override { return 8; }       // 125Hz maximum (8ms period)
     unsigned long maxSampleIntervalMs() const override { return 10000; }   // 0.1Hz minimum
+    unsigned long defaultSampleIntervalMs() const override { return 8; }   // SpO2/HR need >= 50Hz reads
 
 private:
-    AFE44XX* ppgSensor;
-    afe44xx_data rawData;
+    Protocentral_AFE44xx* afe;
+    AFE44xx_Algorithms algo;
+    uint32_t lastReadUs;
+    bool firstRead;
 };
 
 #endif // SENSYTHING_AFE4400_SENSOR_H
