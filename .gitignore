@@ -53,3 +53,6 @@ dkms.conf
 .github/copilot-instructions.md
 CLAUDE.md
 .build/
+
+# Internal discussions, plans, and Claude session logs (never committed)
+internal_docs/
