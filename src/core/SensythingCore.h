@@ -23,6 +23,7 @@
 #include "SensythingConfig.h"
 
 // Forward declarations for communication modules
+class SensythingSensor;
 class SensythingUSB;
 class SensythingBLE;
 class SensythingWiFi;
@@ -34,39 +35,40 @@ public:
     virtual ~SensythingCore();
     
     // =================================================================================================
-    // PURE VIRTUAL METHODS - Must be implemented by board-specific classes
+    // BOARD HOOKS - Default implementations forward to the sensor attached with attachSensor().
+    // Custom boards that do not attach a sensor override these instead.
     // =================================================================================================
     
     /**
      * Initialize the sensor hardware
      * @return true if initialization successful, false otherwise
      */
-    virtual bool initSensor() = 0;
+    virtual bool initSensor();
     
     /**
      * Read a measurement from the sensor
      * @param data Reference to MeasurementData structure to fill
      * @return true if measurement successful, false otherwise
      */
-    virtual bool readMeasurement(MeasurementData& data) = 0;
+    virtual bool readMeasurement(MeasurementData& data);
     
     /**
      * Get the board name (e.g., "Sensything Cap", "Sensything OX")
      * @return Board name string
      */
-    virtual String getBoardName() = 0;
+    virtual String getBoardName();
     
     /**
      * Get the sensor type description (e.g., "FDC1004 Capacitance", "AFE4400 PPG/SpO2")
      * @return Sensor type string
      */
-    virtual String getSensorType() = 0;
+    virtual String getSensorType();
     
     /**
      * Get board-specific configuration
      * @return BoardConfig structure with board details
      */
-    virtual BoardConfig getBoardConfig() = 0;
+    virtual BoardConfig getBoardConfig();
     
     // =================================================================================================
     // PLATFORM INITIALIZATION
@@ -279,6 +281,10 @@ protected:
     MeasurementData currentMeasurement;
     BoardConfig boardConfig;
     
+    // Sensor adapter (owned by the board class) and the board's pin map
+    SensythingSensor* sensor;
+    BoardPins boardPins;
+    
     // Communication module pointers (managed by platform)
     SensythingUSB* usbModule;
     SensythingBLE* bleModule;
@@ -288,6 +294,17 @@ protected:
     // =================================================================================================
     // PROTECTED HELPER METHODS
     // =================================================================================================
+    
+    /**
+     * Attach the board's sensor adapter and pin map, and fill boardConfig from them.
+     * Call from the board class constructor.
+     * @param boardSensor Sensor adapter (must outlive this object; usually a board class member)
+     * @param pins Board pin map
+     * @param boardType Board type identifier
+     * @param boardName Human-readable board name
+     */
+    void attachSensor(SensythingSensor* boardSensor, const BoardPins& pins,
+                      SensythingBoardType boardType, const char* boardName);
     
     /**
      * Initialize system state with defaults

@@ -12,6 +12,7 @@
 #include "../communication/SensythingBLE.h"
 #include "../communication/SensythingWiFi.h"
 #include "../communication/SensythingSDCard.h"
+#include "../sensors/SensythingSensor.h"
 
 // =================================================================================================
 // CONSTRUCTOR / DESTRUCTOR
@@ -23,6 +24,7 @@ SensythingCore::SensythingCore() {
     bleModule = nullptr;
     wifiModule = nullptr;
     sdModule = nullptr;
+    sensor = nullptr;
     
     // Initialize system state
     initSystemState();
@@ -34,6 +36,74 @@ SensythingCore::~SensythingCore() {
     if (bleModule) delete bleModule;
     if (wifiModule) delete wifiModule;
     if (sdModule) delete sdModule;
+}
+
+// =================================================================================================
+// BOARD HOOKS (default implementations forward to the attached sensor)
+// =================================================================================================
+
+void SensythingCore::attachSensor(SensythingSensor* boardSensor, const BoardPins& pins,
+                                  SensythingBoardType boardType, const char* boardName) {
+    sensor = boardSensor;
+    boardPins = pins;
+    
+    boardConfig.boardType = boardType;
+    boardConfig.boardName = boardName;
+    boardConfig.sensorType = sensor->sensorType();
+    
+    // Channel information from the sensor's channel descriptors
+    const ChannelDesc* desc = sensor->channels();
+    boardConfig.channelCount = sensor->channelCount();
+    for (uint8_t i = 0; i < boardConfig.channelCount && i < SENSYTHING_MAX_CHANNELS; i++) {
+        snprintf(boardConfig.channels[i].label, SENSYTHING_MAX_LABEL_LEN, "%s", desc[i].key);
+        snprintf(boardConfig.channels[i].unit, sizeof(boardConfig.channels[i].unit), "%s", desc[i].unit);
+        boardConfig.channels[i].minValue = desc[i].minValue;
+        boardConfig.channels[i].maxValue = desc[i].maxValue;
+        boardConfig.channels[i].active = true;
+    }
+    
+    // Pin configuration
+    boardConfig.i2c_sda = pins.i2cSda;
+    boardConfig.i2c_scl = pins.i2cScl;
+    boardConfig.spi_cs = pins.spiCs;
+    boardConfig.spi_mosi = pins.spiMosi;
+    boardConfig.spi_miso = pins.spiMiso;
+    boardConfig.spi_sck = pins.spiSck;
+    
+    // Sample rate limits
+    boardConfig.minSampleInterval = sensor->minSampleIntervalMs();
+    boardConfig.maxSampleInterval = sensor->maxSampleIntervalMs();
+    
+    // Start at the sensor's own default rate
+    sysState.sampleInterval = sensor->defaultSampleIntervalMs();
+}
+
+bool SensythingCore::initSensor() {
+    if (!sensor) {
+        DEBUG_PRINTLN("No sensor attached");
+        return false;
+    }
+    return sensor->begin(boardPins);
+}
+
+bool SensythingCore::readMeasurement(MeasurementData& data) {
+    if (!sensor) {
+        DEBUG_PRINTLN("No sensor attached");
+        return false;
+    }
+    return sensor->read(data);
+}
+
+String SensythingCore::getBoardName() {
+    return boardConfig.boardName;
+}
+
+String SensythingCore::getSensorType() {
+    return boardConfig.sensorType;
+}
+
+BoardConfig SensythingCore::getBoardConfig() {
+    return boardConfig;
 }
 
 // =================================================================================================

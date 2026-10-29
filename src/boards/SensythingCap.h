@@ -11,29 +11,15 @@
 #ifndef SENSYTHING_CAP_H
 #define SENSYTHING_CAP_H
 
-#include <Wire.h>
-#include <Protocentral_FDC1004.h>
 #include "../core/SensythingCore.h"
+#include "../sensors/FDC1004Sensor.h"
 
 class SensythingCap : public SensythingCore {
 public:
     SensythingCap();
-    ~SensythingCap();
-    
-    // Implement pure virtual methods from SensythingCore
-    bool initSensor() override;
-    bool readMeasurement(MeasurementData& data) override;
-    String getBoardName() override;
-    String getSensorType() override;
-    BoardConfig getBoardConfig() override;
     
 private:
-    FDC1004* capSensor;
-    
-    /**
-     * Configure board-specific settings
-     */
-    void configureBoardConfig();
+    FDC1004Sensor capSensor;
 };
 
 #endif // SENSYTHING_CAP_H

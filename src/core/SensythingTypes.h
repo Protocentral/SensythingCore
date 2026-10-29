@@ -160,6 +160,52 @@ typedef struct {
 } ChannelInfo;
 
 // =================================================================================================
+// SENSOR DESCRIPTORS (published by each sensor adapter, see sensors/SensythingSensor.h)
+// =================================================================================================
+
+enum SensythingChannelRole : uint8_t {
+    CHANNEL_ROLE_WAVEFORM   = 0,   // Raw or filtered signal (PPG, capacitance, ECG)
+    CHANNEL_ROLE_VITAL_HR   = 1,   // Heart rate (bpm)
+    CHANNEL_ROLE_VITAL_SPO2 = 2,   // SpO2 (%)
+    CHANNEL_ROLE_VITAL_RR   = 3,   // Respiration rate (breaths/min)
+    CHANNEL_ROLE_STATUS     = 4    // Status / event channel
+};
+
+typedef struct {
+    const char* key;                             // Machine name, used as the channel label (e.g. "ir_raw")
+    const char* label;                           // Human-readable name (e.g. "IR PPG")
+    const char* unit;                            // Unit string (e.g. "pF", "%", "bpm")
+    float minValue;                              // Expected minimum value
+    float maxValue;                              // Expected maximum value
+    SensythingChannelRole role;                  // What the channel carries
+} ChannelDesc;
+
+typedef struct {
+    uint16_t mask;                               // Bit(s) in MeasurementData.status_flags
+    const char* key;                             // Machine name (e.g. "capdac_adj")
+    const char* label;                           // Human-readable description
+} StatusBitDesc;
+
+// =================================================================================================
+// BOARD PIN MAP (per PCB; -1 = not connected)
+// =================================================================================================
+
+struct BoardPins {
+    int8_t i2cSda = -1;
+    int8_t i2cScl = -1;
+    uint32_t i2cFreq = 0;
+    int8_t spiSck = -1;
+    int8_t spiMiso = -1;
+    int8_t spiMosi = -1;
+    int8_t spiCs = -1;
+    int8_t drdy = -1;                            // Sensor data-ready output
+    int8_t reset = -1;                           // Sensor reset input
+    int8_t pwdn = -1;                            // Sensor power-down input
+    int8_t start = -1;                           // Sensor conversion-start input
+    int8_t diag = -1;                            // Sensor diagnostics-done output
+};
+
+// =================================================================================================
 // BOARD CONFIGURATION STRUCTURE
 // =================================================================================================
 
