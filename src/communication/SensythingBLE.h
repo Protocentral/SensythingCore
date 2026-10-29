@@ -85,11 +85,13 @@ private:
     BLEConnectionCallbacks* pCallbacks;
 
     // Standard SIG health-service characteristics (OX board only):
-    // Heart Rate Measurement (0x2A37) and PLX Spot-Check (0x2A5E)
+    // Heart Rate Measurement (0x2A37), PLX Continuous Measurement (0x2A5F)
+    // and PLX Features (0x2A60)
     BLEService* pHeartRateService;
     BLEService* pSpo2Service;
     BLECharacteristic* pHeartRateChar;
     BLECharacteristic* pSpo2Char;
+    BLECharacteristic* pPlxFeaturesChar;
     bool vitalsEnabled;          // true when board exposes SpO2/HR (OX)
     int lastHeartRate;           // last notified bpm (-1 = none yet)
     int lastSpo2;                // last notified SpO2 % (-1 = none yet)

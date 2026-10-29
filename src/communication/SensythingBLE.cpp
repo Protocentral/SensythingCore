@@ -19,6 +19,7 @@ SensythingBLE::SensythingBLE() {
     pSpo2Service = nullptr;
     pHeartRateChar = nullptr;
     pSpo2Char = nullptr;
+    pPlxFeaturesChar = nullptr;
     vitalsEnabled = false;
     lastHeartRate = -1;
     lastSpo2 = -1;
@@ -88,14 +89,16 @@ bool SensythingBLE::init(String deviceName) {
 
     // Create standard SIG health services for boards that report vitals (OX).
     // Heart Rate Service (0x180D) → Heart Rate Measurement (0x2A37)
-    // Pulse Oximeter Service (0x1822) → PLX Spot-Check Measurement (0x2A5E)
-    // These notify at ~1Hz (only on change), independent of the raw sample stream.
+    // Pulse Oximeter Service (0x1822) → PLX Continuous Measurement (0x2A5F)
+    //                                 + PLX Features (0x2A60, mandatory)
+    // Measurement characteristics are notify-only per HRS/PLXS. They notify
+    // at ~1Hz (only on change), independent of the raw sample stream.
     if (vitalsEnabled) {
         pHeartRateService = pServer->createService(
             BLEUUID((uint16_t)SENSYTHING_BLE_HEARTRATE_SERVICE_UUID));
         pHeartRateChar = pHeartRateService->createCharacteristic(
             BLEUUID((uint16_t)SENSYTHING_BLE_HEARTRATE_CHAR_UUID),
-            BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+            BLECharacteristic::PROPERTY_NOTIFY);
         pHeartRateChar->addDescriptor(new BLE2902());
         pHeartRateService->start();
 
@@ -103,8 +106,16 @@ bool SensythingBLE::init(String deviceName) {
             BLEUUID((uint16_t)SENSYTHING_BLE_SPO2_SERVICE_UUID));
         pSpo2Char = pSpo2Service->createCharacteristic(
             BLEUUID((uint16_t)SENSYTHING_BLE_SPO2_CHAR_UUID),
-            BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+            BLECharacteristic::PROPERTY_NOTIFY);
         pSpo2Char->addDescriptor(new BLE2902());
+
+        // PLX Features: uint16 Supported Features = 0x0000 (no optional
+        // fields), so the Measurement/Device Status Support fields are absent.
+        pPlxFeaturesChar = pSpo2Service->createCharacteristic(
+            BLEUUID((uint16_t)SENSYTHING_BLE_PLX_FEATURES_CHAR_UUID),
+            BLECharacteristic::PROPERTY_READ);
+        uint8_t plxFeatures[2] = {0x00, 0x00};
+        pPlxFeaturesChar->setValue(plxFeatures, sizeof(plxFeatures));
         pSpo2Service->start();
 
         Serial.println(String(EMOJI_SUCCESS) + " HR (0x180D) and SpO2 (0x1822) services started");
@@ -177,10 +188,12 @@ void SensythingBLE::updateVitalsCharacteristics(const MeasurementData& data, con
     int hr = (int)data.channels[3];
     int spo2 = (int)data.channels[2];
     bool signalOk = !(data.status_flags & SENSYTHING_STATUS_NO_SIGNAL);
+    bool hrValid = signalOk && hr > 0 && hr <= 255;
+    bool hrChanged = hrValid && hr != lastHeartRate;
 
     // Heart Rate Measurement (0x2A37): flags(uint8) + HR(uint8)
     // flags = 0x00 → HR value format is uint8, no extra fields present.
-    if (signalOk && hr > 0 && hr <= 255 && hr != lastHeartRate) {
+    if (hrChanged) {
         uint8_t hrm[2];
         hrm[0] = 0x00;
         hrm[1] = (uint8_t)hr;
@@ -189,11 +202,12 @@ void SensythingBLE::updateVitalsCharacteristics(const MeasurementData& data, con
         lastHeartRate = hr;
     }
 
-    // PLX Spot-Check Measurement (0x2A5E): flags(uint8) + SpO2(SFLOAT) + PR(SFLOAT)
-    // flags = 0x00 → no optional fields. SpO2 and pulse rate as SFLOATs (LE).
-    if (signalOk && spo2 > 0 && spo2 <= 100 && spo2 != lastSpo2) {
+    // PLX Continuous Measurement (0x2A5F): flags(uint8) + SpO2PR-Normal
+    // (SpO2 SFLOAT + PR SFLOAT, LE). flags = 0x00 → no optional fields.
+    // Sent when either SpO2 or pulse rate changes.
+    if (signalOk && spo2 > 0 && spo2 <= 100 && (spo2 != lastSpo2 || hrChanged)) {
         uint16_t spo2Sfloat = sfloatFromInt(spo2);
-        uint16_t prSfloat = sfloatFromInt(hr > 0 ? hr : 0);
+        uint16_t prSfloat = sfloatFromInt(hrValid ? hr : 0);
         uint8_t plx[5];
         plx[0] = 0x00;
         plx[1] = spo2Sfloat & 0xFF;

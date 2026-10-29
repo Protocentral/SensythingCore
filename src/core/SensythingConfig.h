@@ -109,7 +109,8 @@
 #define SENSYTHING_BLE_HEARTRATE_SERVICE_UUID     0x180D
 #define SENSYTHING_BLE_HEARTRATE_CHAR_UUID        0x2A37
 #define SENSYTHING_BLE_SPO2_SERVICE_UUID          0x1822
-#define SENSYTHING_BLE_SPO2_CHAR_UUID             0x2A5E
+#define SENSYTHING_BLE_SPO2_CHAR_UUID             0x2A5F   // PLX Continuous Measurement
+#define SENSYTHING_BLE_PLX_FEATURES_CHAR_UUID     0x2A60   // PLX Features (mandatory)
 
 // Custom UUID for HRV/PPG data stream
 #define SENSYTHING_BLE_HRV_SERVICE_UUID     "cd5c7491-4448-7db8-ae4c-d1da8cba36d0"
